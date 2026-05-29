@@ -18,9 +18,9 @@ coding agent, following the phase plans in this directory.
 | 2  | SDK API and `/goal` command surface | ✅ | c14b025 |
 | 3  | Model goal tools | ✅ | c5d8a90 |
 | 4a | Goal context injection | ✅ | 687654c |
-| 4b | Goal usage accounting | ✅ | (this commit) |
-| 4c | Goal continuation loop | 🟡 | — |
-| 4d | Goal evaluator | ⬜ | — |
+| 4b | Goal usage accounting | ✅ | aea58a5 |
+| 4c | Goal continuation loop | ✅ | (this commit) |
+| 4d | Goal evaluator | 🟡 | — |
 | 5  | End-to-end integration and gates | ⬜ | — |
 | 6  | Headless goal mode and hardening | ⬜ | — |
 
@@ -114,3 +114,21 @@ coding agent, following the phase plans in this directory.
 - The 4b plan also lists "subagent wall-clock does not update wallClockMs" and "superseded turn
   does not update final wall-clock". Those depend on the Phase 4c continuation controller /
   finalize hook (the only wall-clock writers from turns), so they are covered in Phase 4c, not 4b.
+
+### Phase 4c
+
+- Added `GoalContinuationController` (`agent/goal/continuation.ts`): per-turn state, injected
+  clock, `lastWallClockAccountedAt` checkpoint; gated on flag + main + active goal. Decision
+  order: stop if gone/paused/terminal → incrementTurn → record wall-clock → accept model report
+  (complete/blocked/impossible) → hard-budget wrap-up → `maxStepsPerTurn` reconciliation →
+  continue. Continuation/wrap-up prompts use `origin {kind:'system_trigger', name:'goal_continuation'}`.
+  `markBudgetLimited` makes the goal terminal so the single wrap-up runs exactly once.
+- `TurnFlow`: passes `startedAt` into the private `runTurn`, constructs the controller once,
+  wraps the loop in `finally` to `finalizeWallClock()` (guarded by flag+main+turnId-owned+same
+  goal). `shouldContinueAfterStop` order is now flush → external Stop hook (one continuation,
+  uncapped for goals) → goal controller. Abnormal ends mark the active goal: aborted →
+  `interrupted` (handled both on the normal `'aborted'` return and in the catch), failure →
+  `error`, escaped `MaxStepsExceeded` → `budget_limited`. All main-agent + flag gated.
+- Tests: goal-continuation.test.ts (20) — controller unit decisions + harness integration
+  (auto-continue, subagent/flag-off no-continue, maxSteps→budget_limited, fail→error,
+  cancel→interrupted, Stop-hook interplay). Full agent-core suite (2334) green; typecheck clean.

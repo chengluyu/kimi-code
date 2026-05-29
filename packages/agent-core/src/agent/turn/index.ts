@@ -15,6 +15,8 @@ import {
 import { basename } from 'pathe';
 
 import type { Agent } from '..';
+import { flags } from '../../flags';
+import { GoalContinuationController } from '../goal/continuation';
 import {
   ErrorCodes,
   type KimiErrorPayload,
@@ -75,6 +77,11 @@ export class TurnFlow {
   /** Best-effort agent id (main / generated id) derived from the agent homedir. */
   private get agentId(): string {
     return this.agent.homedir ? basename(this.agent.homedir) : this.agent.type;
+  }
+
+  /** Whether goal-mode runtime behavior (continuation, abnormal-end marking) applies. */
+  private get goalRuntimeEnabled(): boolean {
+    return flags.enabled('goal-command') && this.agent.type === 'main';
   }
 
   // Returns the new turnId, or null if the turn was marked as resuming.
@@ -233,8 +240,13 @@ export class TurnFlow {
       if (promptHookEnded !== undefined) {
         ended = promptHookEnded;
       } else {
-        const stopReason = await this.runTurn(turnId, signal);
+        const stopReason = await this.runTurn(turnId, signal, startedAt);
         completedStopReason = stopReason;
+        // An aborted run returns normally (the loop swallows the abort); mark an
+        // active goal interrupted here since no exception reaches the catch below.
+        if (stopReason === 'aborted' && this.goalRuntimeEnabled) {
+          await this.agent.goals?.markInterrupted({ reason: 'Goal turn was cancelled' });
+        }
         ended = {
           type: 'turn.ended',
           turnId,
@@ -243,6 +255,21 @@ export class TurnFlow {
         this.agent.emitEvent(ended);
       }
     } catch (error) {
+      // Mark an active goal when the outer turn ends abnormally. These store
+      // methods no-op for non-active goals, so a user pause/cancel/clear (or an
+      // already-terminal goal) is never overwritten. Main-agent only.
+      if (this.goalRuntimeEnabled) {
+        if (isAbortError(error)) {
+          await this.agent.goals?.markInterrupted({ reason: 'Goal turn was cancelled' });
+        } else if (isMaxStepsExceededError(error)) {
+          // A configured step cap is a budget, not a runtime failure.
+          await this.agent.goals?.markBudgetLimited({ reason: 'Model step limit reached' });
+        } else {
+          await this.agent.goals?.markError({
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       if (isAbortError(error)) {
         ended = {
           type: 'turn.ended',
@@ -362,10 +389,18 @@ export class TurnFlow {
     return undefined;
   }
 
-  private async runTurn(turnId: number, signal: AbortSignal): Promise<LoopTurnStopReason> {
+  private async runTurn(
+    turnId: number,
+    signal: AbortSignal,
+    startedAt: number,
+  ): Promise<LoopTurnStopReason> {
     let stopHookContinuationUsed = false;
     const deduper = new ToolCallDeduplicator();
+    // Construct the goal continuation controller once per outer turn.
+    const goalContinuation = new GoalContinuationController(this.agent, { startedAt });
+    const goalIdAtStart = this.agent.goals?.getActiveGoal()?.goalId;
     await this.agent.mcp?.waitForInitialLoad(signal);
+    try {
     while (true) {
       signal.throwIfAborted();
       const model = this.agent.config.model;
@@ -404,29 +439,36 @@ export class TurnFlow {
               deduper.endStep();
             },
             // oxlint-disable-next-line no-loop-func -- stop hook continuation state is scoped to this turn.
-            shouldContinueAfterStop: async ({ signal }) => {
+            shouldContinueAfterStop: async (ctx) => {
+              const { signal } = ctx;
+              // 1. Flush any steered user messages.
               if (this.flushSteerBuffer()) return { continue: true };
               signal.throwIfAborted();
 
-              // Stop hooks get one continuation; otherwise a hook that always blocks would loop forever.
-              if (stopHookContinuationUsed) return { continue: false };
-              const stopBlock = await this.agent.hooks?.triggerBlock('Stop', {
-                signal,
-                inputData: { stopHookActive: stopHookContinuationUsed },
-              });
-              signal.throwIfAborted();
-              if (stopBlock !== undefined) {
-                stopHookContinuationUsed = true;
-                this.agent.context.appendUserMessage(
-                  [{ type: 'text', text: stopBlock.reason }],
-                  {
-                    kind: 'system_trigger',
-                    name: 'stop_hook',
-                  },
-                );
-                return { continue: true };
+              // 2. The external Stop hook gets exactly one continuation; the cap
+              //    is intentionally separate from (and does not cap) goal mode.
+              if (!stopHookContinuationUsed) {
+                const stopBlock = await this.agent.hooks?.triggerBlock('Stop', {
+                  signal,
+                  inputData: { stopHookActive: stopHookContinuationUsed },
+                });
+                signal.throwIfAborted();
+                if (stopBlock !== undefined) {
+                  stopHookContinuationUsed = true;
+                  this.agent.context.appendUserMessage(
+                    [{ type: 'text', text: stopBlock.reason }],
+                    {
+                      kind: 'system_trigger',
+                      name: 'stop_hook',
+                    },
+                  );
+                  return { continue: true };
+                }
               }
-              return { continue: false };
+
+              // 3. Goal continuation (returns { continue: false } when goal mode
+              //    is inactive, preserving the previous stop-by-default behavior).
+              return goalContinuation.shouldContinueAfterStop(ctx);
             },
             prepareToolExecution: async (ctx) => {
               const cached = deduper.checkSameStep(
@@ -486,6 +528,18 @@ export class TurnFlow {
           this.agent.log.error('turn failed', { turnId, error });
         }
         throw error;
+      }
+    }
+    } finally {
+      // Record the final wall-clock interval for normal completion, thrown
+      // errors, and cancellations where the same goal still exists.
+      if (
+        this.goalRuntimeEnabled &&
+        this.currentId === turnId &&
+        goalIdAtStart !== undefined &&
+        this.agent.goals?.getActiveGoal()?.goalId === goalIdAtStart
+      ) {
+        await goalContinuation.finalizeWallClock();
       }
     }
   }
