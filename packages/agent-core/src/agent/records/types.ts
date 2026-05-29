@@ -1,6 +1,12 @@
 import type { ContentPart, TokenUsage } from '@moonshot-ai/kosong';
 
 import type { LoopRecordedEvent } from '../../loop';
+import type {
+  GoalActor,
+  GoalBudgetLimits,
+  GoalEvidence,
+  GoalStatus,
+} from '../../session/goal';
 import type { ToolStoreUpdate } from '../../tools/store';
 import type { CompactionBeginData, CompactionResult } from '../compaction';
 import type { AgentConfigUpdateData } from '../config';
@@ -71,6 +77,56 @@ export interface AgentRecordEvents {
   'context.apply_compaction': CompactionResult;
 
   'tools.update_store': ToolStoreUpdate;
+
+  // Goal-mode audit records. These are an audit trail only: replay MUST NOT
+  // rebuild goal state from them — `state.json` (metadata.custom.goal) is the
+  // source of truth.
+  'goal.create': {
+    goalId: string;
+    objective: string;
+    status: GoalStatus;
+    actor: GoalActor;
+    budgetLimits: GoalBudgetLimits;
+  };
+  'goal.update': {
+    goalId: string;
+    status: GoalStatus;
+    actor: GoalActor;
+    reason?: string;
+    evidence?: readonly GoalEvidence[];
+  };
+  'goal.account_usage': {
+    goalId: string;
+    /** Whether the delta came from token accounting or wall-clock accounting. */
+    usageKind: 'token' | 'wall_clock';
+    delta: number;
+    agentId?: string;
+    agentType?: string;
+    source?: string;
+    tokensUsed: number;
+    wallClockMs: number;
+  };
+  'goal.continuation': {
+    goalId: string;
+    turnsUsed: number;
+  };
+  'goal.report': {
+    goalId: string;
+    requestedStatus: string;
+    reason?: string;
+    evidence?: readonly GoalEvidence[];
+  };
+  'goal.evaluate': {
+    goalId: string;
+    verdict: string;
+    reason?: string;
+    evidence?: readonly GoalEvidence[];
+  };
+  'goal.clear': {
+    goalId: string;
+    actor: GoalActor;
+    reason?: string;
+  };
 }
 
 export type AgentRecord = {

@@ -10,10 +10,59 @@ import { SessionAPIImpl } from '../../src/session/rpc';
 import {
   DEFAULT_GOAL_TURN_BUDGET,
   SessionGoalStore,
+  type GoalAuditSink,
   type SessionGoalState,
 } from '../../src/session/goal';
+import type { AgentRecord } from '../../src/agent/records';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { testKaos } from '../fixtures/test-kaos';
+
+/** An in-memory store backing plus a controllable lazy audit sink. */
+function makeAuditStore(opts: { sinkReady?: boolean } = {}) {
+  let state: SessionGoalState | undefined;
+  const records: AgentRecord[] = [];
+  const sink: GoalAuditSink = { logRecord: (r) => records.push(r) };
+  let ready = opts.sinkReady ?? true;
+  const store = new SessionGoalStore({
+    sessionId: 'test',
+    readState: () => state,
+    writeState: async (next) => {
+      state = next;
+    },
+    auditSink: () => (ready ? sink : undefined),
+  });
+  return {
+    store,
+    records,
+    types: () => records.map((r) => r.type),
+    current: () => state,
+    setState: (next: SessionGoalState | undefined) => {
+      state = next;
+    },
+    enableSink: () => {
+      ready = true;
+    },
+  };
+}
+
+function activeState(overrides: Partial<SessionGoalState> = {}): SessionGoalState {
+  return {
+    goalId: 'g-1',
+    objective: 'do work',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    startedBy: 'user',
+    updatedBy: 'user',
+    turnsUsed: 0,
+    consecutiveNoProgressTurns: 0,
+    consecutiveFailureTurns: 0,
+    tokensUsed: 0,
+    wallClockMs: 0,
+    budgetLimits: { turnBudget: 20 },
+    ...overrides,
+  };
+}
 
 /** A simple in-memory backing for the goal store. */
 function makeStore() {
@@ -339,6 +388,146 @@ describe('SessionGoalStore lifecycle', () => {
   });
 });
 
+describe('SessionGoalStore audit records', () => {
+  it('writes directly when the sink is already available', async () => {
+    const { store, types } = makeAuditStore({ sinkReady: true });
+    await store.createGoal({ objective: 'work' });
+    expect(types()).toEqual(['goal.create']);
+  });
+
+  it('queues records and flushes them in order when the sink becomes available', async () => {
+    const { store, types, enableSink } = makeAuditStore({ sinkReady: false });
+    await store.createGoal({ objective: 'work' });
+    await store.incrementTurn();
+    expect(types()).toEqual([]); // queued, not yet flushed
+    enableSink();
+    store.flushPendingRecords();
+    expect(types()).toEqual(['goal.create', 'goal.continuation']);
+  });
+
+  it('flushPendingRecords is idempotent', async () => {
+    const { store, types, enableSink } = makeAuditStore({ sinkReady: false });
+    await store.createGoal({ objective: 'work' });
+    enableSink();
+    store.flushPendingRecords();
+    store.flushPendingRecords();
+    expect(types()).toEqual(['goal.create']);
+  });
+
+  it('replacing a goal appends one goal.clear before the new goal.create', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'first' });
+    await store.createGoal({ objective: 'second', replace: true });
+    expect(types()).toEqual(['goal.create', 'goal.clear', 'goal.create']);
+  });
+
+  it('pauseGoal and resumeGoal append goal.update', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.pauseGoal();
+    await store.resumeGoal();
+    expect(types()).toEqual(['goal.create', 'goal.update', 'goal.update']);
+  });
+
+  it('updateGoal appends a terminal goal.update', async () => {
+    const { store, records } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.updateGoal({ status: 'complete', reason: 'done' });
+    const last = records.at(-1);
+    expect(last).toMatchObject({ type: 'goal.update', status: 'complete' });
+  });
+
+  it('accounting appends goal.account_usage with usage kind', async () => {
+    const { store, records } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.recordTokenUsage({ tokenDelta: 5, agentId: 'main', agentType: 'main', source: 'agent_step' });
+    await store.recordWallClockUsage({ wallClockMs: 100 });
+    const usage = records.filter((r) => r.type === 'goal.account_usage');
+    expect(usage.map((r) => (r as { usageKind: string }).usageKind)).toEqual(['token', 'wall_clock']);
+  });
+
+  it('incrementTurn appends goal.continuation', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.incrementTurn();
+    expect(types().at(-1)).toBe('goal.continuation');
+  });
+
+  it('recordModelReport appends goal.report', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.recordModelReport({ requestedStatus: 'complete', reason: 'done' });
+    expect(types().at(-1)).toBe('goal.report');
+  });
+
+  it('recordEvaluatorVerdict appends goal.evaluate', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.recordEvaluatorVerdict({ verdict: 'continue', reason: 'progress' });
+    expect(types().at(-1)).toBe('goal.evaluate');
+  });
+
+  it('cancelGoal appends goal.update before goal.clear', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.cancelGoal({ reason: 'stop' });
+    expect(types()).toEqual(['goal.create', 'goal.update', 'goal.clear']);
+  });
+
+  it('clearGoal appends goal.clear', async () => {
+    const { store, types } = makeAuditStore();
+    await store.createGoal({ objective: 'work' });
+    await store.clearGoal();
+    expect(types().at(-1)).toBe('goal.clear');
+  });
+});
+
+describe('SessionGoalStore normalizeMetadata', () => {
+  it('converts an active goal to paused on resume', async () => {
+    const { store, current, setState } = makeAuditStore();
+    setState(activeState());
+    await store.normalizeMetadata();
+    expect(current()?.status).toBe('paused');
+    expect(store.getGoal().goal?.status).toBe('paused');
+  });
+
+  it('queues a goal.update for the active-to-paused resume transition', async () => {
+    const { store, types, setState } = makeAuditStore();
+    setState(activeState());
+    await store.normalizeMetadata();
+    expect(types()).toEqual(['goal.update']);
+  });
+
+  it('keeps paused goals on resume', async () => {
+    const { store, types, current, setState } = makeAuditStore();
+    setState(activeState({ status: 'paused' }));
+    await store.normalizeMetadata();
+    expect(current()?.status).toBe('paused');
+    expect(types()).toEqual([]);
+  });
+
+  it('keeps terminal goal snapshots on resume', async () => {
+    const { store, current, setState } = makeAuditStore();
+    setState(activeState({ status: 'complete', terminalReason: 'done' }));
+    await store.normalizeMetadata();
+    expect(current()?.status).toBe('complete');
+  });
+
+  it('removes malformed goal data on resume', async () => {
+    const { store, current, setState } = makeAuditStore();
+    setState({ bogus: true } as unknown as SessionGoalState);
+    await store.normalizeMetadata();
+    expect(current()).toBeUndefined();
+  });
+
+  it('removes stale cancelled goals on resume', async () => {
+    const { store, current, setState } = makeAuditStore();
+    setState(activeState({ status: 'cancelled' }));
+    await store.normalizeMetadata();
+    expect(current()).toBeUndefined();
+  });
+});
+
 describe('SessionGoalStore disk persistence', () => {
   it('creating a goal writes metadata.custom.goal to state.json', async () => {
     const sessionDir = await makeTempDir();
@@ -391,5 +580,48 @@ describe('SessionAPIImpl.updateSessionMetadata goal reservation', () => {
     await expect(
       api.updateSessionMetadata({ metadata: { custom: { goal: { objective: 'hax' } } } } as never),
     ).rejects.toMatchObject({ code: ErrorCodes.GOAL_METADATA_RESERVED });
+  });
+});
+
+describe('Session resume goal lifecycle', () => {
+  function sessionOptions(sessionDir: string) {
+    return {
+      id: 'goal-resume',
+      kaos: testKaos.withCwd(sessionDir),
+      homedir: sessionDir,
+      rpc: createSessionRpc(),
+      skills: { explicitDirs: [join(sessionDir, 'missing')] },
+    } as const;
+  }
+
+  it('demotes an active goal to paused after resume', async () => {
+    const sessionDir = await makeTempDir();
+    const session = new Session(sessionOptions(sessionDir));
+    await session.createMain();
+    await session.goals.createGoal({ objective: 'resume me' });
+    await session.flushMetadata();
+
+    const resumed = new Session(sessionOptions(sessionDir));
+    await resumed.resume();
+    const goal = resumed.goals.getGoal().goal;
+    expect(goal?.objective).toBe('resume me');
+    expect(goal?.status).toBe('paused');
+    await resumed.flushMetadata();
+  });
+
+  it('preserves a terminal goal snapshot after resume', async () => {
+    const sessionDir = await makeTempDir();
+    const session = new Session(sessionOptions(sessionDir));
+    await session.createMain();
+    await session.goals.createGoal({ objective: 'finish me' });
+    await session.goals.updateGoal({ status: 'complete', reason: 'done' });
+    await session.flushMetadata();
+
+    const resumed = new Session(sessionOptions(sessionDir));
+    await resumed.resume();
+    const goal = resumed.goals.getGoal().goal;
+    expect(goal?.status).toBe('complete');
+    expect(goal?.terminalReason).toBe('done');
+    await resumed.flushMetadata();
   });
 });

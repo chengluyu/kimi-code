@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { ErrorCodes, KimiError } from '#/errors';
+import type { AgentRecord } from '../agent/records/types';
+
+/** Minimal audit sink the goal store writes `goal.*` records into. */
+export interface GoalAuditSink {
+  logRecord(record: AgentRecord): void;
+}
 
 /**
  * Durable goal-mode state owned by {@link SessionGoalStore}.
@@ -160,6 +166,11 @@ export interface SessionGoalStoreOptions {
   readonly readState: () => SessionGoalState | undefined;
   /** Writes (or clears, when `undefined`) the goal state and persists metadata. */
   readonly writeState: (state: SessionGoalState | undefined) => Promise<void>;
+  /**
+   * Lazily resolves the main-agent audit sink. Goal audit records are written
+   * here once the sink exists, and queued in order until then.
+   */
+  readonly auditSink?: () => GoalAuditSink | undefined;
 }
 
 /**
@@ -172,7 +183,68 @@ export interface SessionGoalStoreOptions {
  * - User owns `paused`, `cancelled`, and the `cleared` audit action.
  */
 export class SessionGoalStore {
+  /** Audit records queued until the main-agent sink becomes available. */
+  private readonly pending: AgentRecord[] = [];
+
   constructor(private readonly options: SessionGoalStoreOptions) {}
+
+  // --- Audit -------------------------------------------------------------
+
+  /**
+   * Writes an audit record to the main-agent sink, or queues it in order when
+   * the sink is not yet available (e.g. before the main agent exists).
+   */
+  private appendAudit(record: AgentRecord): void {
+    const sink = this.options.auditSink?.();
+    if (sink !== undefined) {
+      sink.logRecord(record);
+    } else {
+      this.pending.push(record);
+    }
+  }
+
+  /** Flushes queued audit records in original order once a sink is available. */
+  flushPendingRecords(): void {
+    const sink = this.options.auditSink?.();
+    if (sink === undefined) return;
+    const queued = this.pending.splice(0);
+    for (const record of queued) {
+      sink.logRecord(record);
+    }
+  }
+
+  /**
+   * Reconciles persisted goal state with runtime reality on session resume.
+   *
+   * An `active` goal cannot still be running after a process restart (goal
+   * continuation only advances inside a live turn), so it is demoted to
+   * `paused`, requiring `/goal resume` to restart work. Paused and terminal
+   * goals are preserved. Malformed and stale-`cancelled` records are removed.
+   */
+  async normalizeMetadata(): Promise<void> {
+    const state = this.options.readState();
+    if (state === undefined) return;
+
+    if (!isValidGoalState(state)) {
+      await this.options.writeState(undefined);
+      return;
+    }
+
+    // A `cancelled` status persisted to disk means clear did not complete; drop it.
+    if (state.status === 'cancelled') {
+      await this.options.writeState(undefined);
+      return;
+    }
+
+    if (state.status === 'active') {
+      this.applyStatus(state, 'paused', 'runtime', 'Paused after session resume');
+      await this.options.writeState(state);
+      this.appendStatusUpdate(state, 'runtime', 'Paused after session resume');
+      return;
+    }
+
+    // Paused and terminal goals are left intact.
+  }
 
   // --- Reads -------------------------------------------------------------
 
@@ -237,6 +309,14 @@ export class SessionGoalStore {
     }
 
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.create',
+      goalId: state.goalId,
+      objective: state.objective,
+      status: state.status,
+      actor,
+      budgetLimits: state.budgetLimits,
+    });
     return this.toSnapshot(state);
   }
 
@@ -251,8 +331,10 @@ export class SessionGoalStore {
         `Cannot pause a goal in status "${state.status}"`,
       );
     }
-    this.applyStatus(state, 'paused', input.actor ?? 'user', input.reason);
+    const actor = input.actor ?? 'user';
+    this.applyStatus(state, 'paused', actor, input.reason);
     await this.options.writeState(state);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
@@ -265,20 +347,23 @@ export class SessionGoalStore {
         `Cannot resume a goal in status "${state.status}"`,
       );
     }
-    this.applyStatus(state, 'active', input.actor ?? 'user', input.reason);
+    const actor = input.actor ?? 'user';
+    this.applyStatus(state, 'active', actor, input.reason);
     await this.options.writeState(state);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
   async cancelGoal(input: GoalControlInput = {}): Promise<GoalSnapshot> {
     const state = this.requireState();
-    this.applyStatus(state, 'cancelled', input.actor ?? 'user', input.reason);
+    const actor = input.actor ?? 'user';
+    this.applyStatus(state, 'cancelled', actor, input.reason);
     state.terminalReason = input.reason;
     const snapshot = this.toSnapshot(state);
-    // Persist the cancelled transition (audit hook lands in Phase 1b), then
-    // clear the current goal from metadata.
+    // Persist the cancelled transition and audit it, then clear the goal.
     await this.options.writeState(state);
-    await this.clearInternal(input.actor ?? 'user', input.reason);
+    this.appendStatusUpdate(state, actor, input.reason);
+    await this.clearInternal(actor, input.reason);
     return snapshot;
   }
 
@@ -301,13 +386,15 @@ export class SessionGoalStore {
       );
     }
     const state = this.requireState();
-    this.applyStatus(state, input.status, input.actor ?? 'evaluator', input.reason);
+    const actor = input.actor ?? 'evaluator';
+    this.applyStatus(state, input.status, actor, input.reason);
     state.terminalReason = input.reason;
     if (input.evidence !== undefined) {
       state.terminalEvidence = input.evidence;
       state.lastEvidence = input.evidence;
     }
     await this.options.writeState(state);
+    this.appendStatusUpdate(state, actor, input.reason, input.evidence);
     return this.toSnapshot(state);
   }
 
@@ -338,18 +425,40 @@ export class SessionGoalStore {
   }): Promise<GoalSnapshot | null> {
     const state = this.options.readState();
     if (state === undefined || state.status !== 'active') return null;
-    state.tokensUsed += Math.max(0, input.tokenDelta);
+    const delta = Math.max(0, input.tokenDelta);
+    state.tokensUsed += delta;
     state.updatedAt = new Date().toISOString();
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.account_usage',
+      goalId: state.goalId,
+      usageKind: 'token',
+      delta,
+      agentId: input.agentId,
+      agentType: input.agentType,
+      source: input.source,
+      tokensUsed: state.tokensUsed,
+      wallClockMs: state.wallClockMs,
+    });
     return this.toSnapshot(state);
   }
 
   async recordWallClockUsage(input: { wallClockMs: number }): Promise<GoalSnapshot | null> {
     const state = this.options.readState();
     if (state === undefined || state.status !== 'active') return null;
-    state.wallClockMs += Math.max(0, input.wallClockMs);
+    const delta = Math.max(0, input.wallClockMs);
+    state.wallClockMs += delta;
     state.updatedAt = new Date().toISOString();
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.account_usage',
+      goalId: state.goalId,
+      usageKind: 'wall_clock',
+      delta,
+      source: 'main_wall_clock',
+      tokensUsed: state.tokensUsed,
+      wallClockMs: state.wallClockMs,
+    });
     return this.toSnapshot(state);
   }
 
@@ -360,6 +469,11 @@ export class SessionGoalStore {
     state.updatedAt = new Date().toISOString();
     if (input.evidence !== undefined) state.lastEvidence = input.evidence;
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.continuation',
+      goalId: state.goalId,
+      turnsUsed: state.turnsUsed,
+    });
     return this.toSnapshot(state);
   }
 
@@ -376,6 +490,13 @@ export class SessionGoalStore {
     // recordModelReport never changes status; it stores the model's requested
     // terminal state as evidence for the continuation controller / evaluator.
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.report',
+      goalId: state.goalId,
+      requestedStatus: input.requestedStatus,
+      reason: input.reason,
+      evidence: input.evidence,
+    });
     return this.toSnapshot(state);
   }
 
@@ -398,6 +519,13 @@ export class SessionGoalStore {
     state.consecutiveFailureTurns = 0;
     state.updatedAt = new Date().toISOString();
     await this.options.writeState(state);
+    this.appendAudit({
+      type: 'goal.evaluate',
+      goalId: state.goalId,
+      verdict: input.verdict,
+      reason: input.reason,
+      evidence: input.evidence,
+    });
     return this.toSnapshot(state);
   }
 
@@ -418,13 +546,32 @@ export class SessionGoalStore {
       state.lastEvidence = evidence;
     }
     await this.options.writeState(state);
+    this.appendStatusUpdate(state, 'runtime', reason, evidence);
     return this.toSnapshot(state);
   }
 
-  private async clearInternal(_actor: GoalActor, _reason?: string): Promise<void> {
+  private async clearInternal(actor: GoalActor, reason?: string): Promise<void> {
     const state = this.options.readState();
     if (state === undefined) return; // idempotent
+    const goalId = state.goalId;
     await this.options.writeState(undefined);
+    this.appendAudit({ type: 'goal.clear', goalId, actor, reason });
+  }
+
+  private appendStatusUpdate(
+    state: SessionGoalState,
+    actor: GoalActor,
+    reason?: string,
+    evidence?: readonly GoalEvidence[],
+  ): void {
+    this.appendAudit({
+      type: 'goal.update',
+      goalId: state.goalId,
+      status: state.status,
+      actor,
+      reason,
+      evidence,
+    });
   }
 
   private applyStatus(
@@ -488,6 +635,36 @@ export class SessionGoalStore {
       terminalEvidence: state.terminalEvidence,
     };
   }
+}
+
+const ALL_GOAL_STATUSES: ReadonlySet<string> = new Set<GoalStatus>([
+  'active',
+  'paused',
+  'complete',
+  'blocked',
+  'impossible',
+  'budget_limited',
+  'interrupted',
+  'error',
+  'cancelled',
+]);
+
+/** Structural validity check for a persisted goal record (used on resume). */
+export function isValidGoalState(value: unknown): value is SessionGoalState {
+  if (typeof value !== 'object' || value === null) return false;
+  const state = value as Partial<SessionGoalState>;
+  return (
+    typeof state.goalId === 'string' &&
+    state.goalId.length > 0 &&
+    typeof state.objective === 'string' &&
+    state.objective.length > 0 &&
+    typeof state.status === 'string' &&
+    ALL_GOAL_STATUSES.has(state.status) &&
+    typeof state.turnsUsed === 'number' &&
+    typeof state.tokensUsed === 'number' &&
+    typeof state.budgetLimits === 'object' &&
+    state.budgetLimits !== null
+  );
 }
 
 export function computeBudgetReport(state: SessionGoalState): GoalBudgetReport {
