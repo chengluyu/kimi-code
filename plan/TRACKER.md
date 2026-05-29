@@ -16,9 +16,9 @@ coding agent, following the phase plans in this directory.
 | 1a | Core session goal state | ✅ | 040a06c |
 | 1b | Goal audit and resume lifecycle | ✅ | 70ee3c6 |
 | 2  | SDK API and `/goal` command surface | ✅ | c14b025 |
-| 3  | Model goal tools | ✅ | (this commit) |
-| 4a | Goal context injection | 🟡 | — |
-| 4b | Goal usage accounting | ⬜ | — |
+| 3  | Model goal tools | ✅ | c5d8a90 |
+| 4a | Goal context injection | ✅ | (this commit) |
+| 4b | Goal usage accounting | 🟡 | — |
 | 4c | Goal continuation loop | ⬜ | — |
 | 4d | Goal evaluator | ⬜ | — |
 | 5  | End-to-end integration and gates | ⬜ | — |
@@ -83,3 +83,15 @@ coding agent, following the phase plans in this directory.
   (subagent profiles do not).
 - Tests: tools/goal.test.ts (registration gate via flag env + tool behavior), profile test.
   Full agent-core suite (2300) green; typecheck clean.
+
+### Phase 4a
+
+- Added `GoalInjector` (`agent/injection/goal.ts`, variant `goal`): injects only for an active
+  goal (none/paused/terminal → no injection), wraps objective in `<untrusted_objective>` and
+  completion criterion in `<untrusted_completion_criterion>`, shows status/progress/budgets with
+  three threshold bands (<75% / 75–99% / ≥100%), plus model-report and evaluator context.
+- `InjectionManager` adds it (after PluginSessionStart, before PlanMode) only when
+  `goal-command` enabled and `agent.type === 'main'`, via an explicit push-ordered array.
+- Test harness `testAgent` gained a `goals` option. Tests: injection/goal.test.ts (14) including
+  the wire `context.append_message` record with `origin.variant === 'goal'`. Injection suite (33)
+  green; typecheck clean.
