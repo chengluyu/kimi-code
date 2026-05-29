@@ -16,7 +16,11 @@ function fixedEvaluator(verdict: GoalEvaluatorVerdict, reason = 'judge'): () => 
   });
 }
 import { HookEngine } from '../../src/session/hooks';
-import { SessionGoalStore, type SessionGoalState } from '../../src/session/goal';
+import {
+  DEFAULT_GOAL_TURN_BUDGET,
+  SessionGoalStore,
+  type SessionGoalState,
+} from '../../src/session/goal';
 import { testAgent } from './harness/agent';
 
 function waitForAbort(signal: AbortSignal | undefined): Promise<void> {
@@ -191,6 +195,27 @@ describe('GoalContinuationController decisions', () => {
     // stepNumber 2, maxSteps 3 -> remaining 1 -> wrap-up + continue.
     expect(await c.shouldContinueAfterStop(stoppedCtx(2))).toEqual({ continue: true });
     expect(store.getGoal().goal!.status).toBe('budget_limited');
+  });
+
+  it('the default turn budget caps an evaluator that always says continue', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' }); // no explicit budget -> DEFAULT_GOAL_TURN_BUDGET
+    const { agent } = controllerAgent({ goals: store });
+    const c = new GoalContinuationController(agent, {
+      startedAt: 0,
+      createEvaluator: fixedEvaluator('continue'),
+    });
+
+    let iterations = 0;
+    let result = { continue: true };
+    while (result.continue && iterations < 100) {
+      iterations += 1;
+      result = await c.shouldContinueAfterStop(stoppedCtx(iterations));
+    }
+
+    expect(result.continue).toBe(false);
+    expect(store.getGoal().goal!.status).toBe('budget_limited');
+    expect(store.getGoal().goal!.turnsUsed).toBeLessThanOrEqual(DEFAULT_GOAL_TURN_BUDGET);
   });
 
   it('finalizeWallClock records the trailing interval', async () => {

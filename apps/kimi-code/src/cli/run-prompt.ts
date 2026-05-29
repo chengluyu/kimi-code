@@ -19,6 +19,13 @@ import {
 import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
 
 import type { CLIOptions, PromptOutputFormat } from './options';
+import {
+  formatGoalSummaryText,
+  goalExitCode,
+  goalSummaryJson,
+  parseHeadlessGoalCreate,
+  type HeadlessGoalCreate,
+} from './goal-prompt';
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from './telemetry';
 import { createKimiCodeHostIdentity } from './version';
 
@@ -132,7 +139,16 @@ export async function runPrompt(
     });
 
     const outputFormat = opts.outputFormat ?? 'text';
-    await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
+    // Headless goal mode: `kimi -p "/goal <objective>"`. The continuation loop
+    // runs inside one turn, so the normal prompt-turn waiter blocks until the
+    // goal is terminal; we then emit a summary and set a distinct exit code.
+    const flagMap = await harness.getExperimentalFlags();
+    const goalCreate = parseHeadlessGoalCreate(opts.prompt!, flagMap['goal-command'] === true);
+    if (goalCreate !== undefined) {
+      await runHeadlessGoal(session, goalCreate, outputFormat, stdout, stderr);
+    } else {
+      await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
+    }
     writeResumeHint(session.id, outputFormat, stdout, stderr);
 
     withTelemetryContext({ sessionId: session.id }).track('exit', {
@@ -140,6 +156,37 @@ export async function runPrompt(
     });
   } finally {
     await cleanupPromptRun();
+  }
+}
+
+async function runHeadlessGoal(
+  session: Session,
+  goal: HeadlessGoalCreate,
+  outputFormat: PromptOutputFormat,
+  stdout: PromptOutput,
+  stderr: PromptOutput,
+): Promise<void> {
+  await session.createGoal({
+    objective: goal.objective,
+    replace: goal.replace,
+    budgetLimits: goal.budgetLimits,
+  });
+  try {
+    // The objective is sent as the normal prompt; goal continuation keeps the
+    // turn alive until a terminal state is reached.
+    await runPromptTurn(session, goal.objective, outputFormat, stdout, stderr);
+  } finally {
+    const snapshot = (await session.getGoal()).goal;
+    if (outputFormat === 'stream-json') {
+      stdout.write(`${JSON.stringify(goalSummaryJson(snapshot))}\n`);
+    } else {
+      stderr.write(`${formatGoalSummaryText(snapshot)}\n`);
+    }
+    // Map the terminal goal status to a distinct, non-fatal exit code. A turn
+    // that threw (error / cancellation) already propagates its own exit path.
+    if (snapshot !== null && snapshot.status !== 'complete') {
+      process.exitCode = goalExitCode(snapshot.status);
+    }
   }
 }
 

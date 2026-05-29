@@ -33,6 +33,12 @@ const GOAL_FLAG = 'KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND';
 const MOCK_PROVIDER = { type: 'kimi', apiKey: 'test-key', model: 'mock-model' } as const satisfies ProviderConfig;
 
 const tempDirs: string[] = [];
+const openSessions: Session[] = [];
+
+function track(session: Session): Session {
+  openSessions.push(session);
+  return session;
+}
 
 beforeEach(() => {
   process.env[GOAL_FLAG] = 'true';
@@ -41,6 +47,9 @@ beforeEach(() => {
 
 afterEach(async () => {
   delete process.env[GOAL_FLAG];
+  // Close sessions first so their async metadata/wire writes settle before the
+  // temp dirs are removed (otherwise rm races with a write -> ENOTEMPTY).
+  await Promise.allSettled(openSessions.splice(0).map((s) => s.close()));
   for (const dir of tempDirs.splice(0)) {
     await rm(dir, { recursive: true, force: true });
   }
@@ -78,14 +87,16 @@ function createSessionRpc(events: Array<Record<string, unknown>>): SDKSessionRPC
 
 async function setupSession(sessionDir: string, events: Array<Record<string, unknown>>, tools: readonly string[]) {
   const scripted = createScriptedGenerate();
-  const session = new Session({
-    id: 'goal-session',
-    kaos: testKaos.withCwd(sessionDir),
-    homedir: sessionDir,
-    rpc: createSessionRpc(events),
-    skills: { explicitDirs: [join(sessionDir, 'missing')] },
-    providerManager: testProviderManager(),
-  });
+  const session = track(
+    new Session({
+      id: 'goal-session',
+      kaos: testKaos.withCwd(sessionDir),
+      homedir: sessionDir,
+      rpc: createSessionRpc(events),
+      skills: { explicitDirs: [join(sessionDir, 'missing')] },
+      providerManager: testProviderManager(),
+    }),
+  );
   const { agent } = await session.createAgent({ type: 'main', generate: scripted.generate }, goalProfile(tools));
   agent.config.update({ modelAlias: 'mock-model', thinkingLevel: 'off' });
   agent.permission.setMode('yolo');
@@ -182,16 +193,45 @@ describe('goal session end-to-end', () => {
     await api.createGoal({ objective: 'resume me' });
     await session.flushMetadata();
 
-    const resumed = new Session({
+    const resumed = track(new Session({
       id: 'goal-session',
       kaos: testKaos.withCwd(sessionDir),
       homedir: sessionDir,
       rpc: createSessionRpc([]),
       skills: { explicitDirs: [join(sessionDir, 'missing')] },
       providerManager: testProviderManager(),
-    });
+    }));
     await resumed.resume();
     expect(new SessionAPIImpl(resumed).getGoal({}).goal?.status).toBe('paused');
+    await resumed.flushMetadata();
+  });
+
+  it('retains terminal blocked reason and evidence across resume', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    await new SessionAPIImpl(session).createGoal({ objective: 'work' });
+    await session.goals.updateGoal({
+      status: 'blocked',
+      actor: 'evaluator',
+      reason: 'needs credentials',
+      evidence: [{ summary: 'auth step failed' }],
+    });
+    await session.flushMetadata();
+
+    const resumed = track(new Session({
+      id: 'goal-session',
+      kaos: testKaos.withCwd(sessionDir),
+      homedir: sessionDir,
+      rpc: createSessionRpc([]),
+      skills: { explicitDirs: [join(sessionDir, 'missing')] },
+      providerManager: testProviderManager(),
+    }));
+    await resumed.resume();
+    const goal = new SessionAPIImpl(resumed).getGoal({}).goal;
+    expect(goal?.status).toBe('blocked');
+    expect(goal?.terminalReason).toBe('needs credentials');
+    expect(goal?.terminalEvidence).toEqual([{ summary: 'auth step failed' }]);
     await resumed.flushMetadata();
   });
 

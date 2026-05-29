@@ -21,8 +21,8 @@ coding agent, following the phase plans in this directory.
 | 4b | Goal usage accounting | ✅ | aea58a5 |
 | 4c | Goal continuation loop | ✅ | 0899188 |
 | 4d | Goal evaluator | ✅ | d0dc822 |
-| 5  | End-to-end integration and gates | ✅ | (this commit) |
-| 6  | Headless goal mode and hardening | 🟡 | — |
+| 5  | End-to-end integration and gates | ✅ | 674b2c1 |
+| 6  | Headless goal mode and hardening | ✅ | (this commit) |
 
 ## Detours / Notes
 
@@ -186,3 +186,45 @@ coding agent, following the phase plans in this directory.
   does) with a scripted `generate`, rather than the full CoreAPI/RPC `createTestRpc` harness, and
   the evaluator is `vi.mock`'d so verdicts are deterministic without interleaving evaluator JSON
   into the model queue. This keeps the e2e flow readable and stable.
+
+### Phase 6
+
+- Headless goal mode: `apps/kimi-code/src/cli/goal-prompt.ts` (pure helpers — exit-code map,
+  `/goal` create parser reusing `parseGoalCommand`, JSON/text summary) wired into
+  `cli/run-prompt.ts`. `kimi -p "/goal <objective>"` (flag on) creates the goal, runs the turn
+  (continuation runs inside it), then emits a summary and sets a distinct exit code
+  (complete 0, error 1, blocked 3, impossible 4, budget_limited 5, interrupted 6, cancelled 7).
+  Flag-off treats `/goal …` as an ordinary prompt. Resumed stale active goals are demoted to
+  paused by the existing resume normalization.
+- Tests: `test/cli/goal-prompt.test.ts` (9) — helper unit tests + `runPrompt` integration
+  (create+summary, non-complete exit code, flag-off passthrough); added `getExperimentalFlags`
+  to the existing run-prompt test harness mock. Hardening: `DEFAULT_GOAL_TURN_BUDGET` caps an
+  always-continue evaluator (controller test); terminal `blocked` reason+evidence survive resume
+  (harness test). Fixed an `afterEach` temp-dir cleanup race by closing sessions first.
+- Gates: full agent-core suite (2357, stable across repeated runs) + app cli/commands (205)
+  green; `pnpm run typecheck` + `pnpm run lint` OK.
+
+### Hardening decisions (Phase 6 review)
+
+- **SDK goal events**: deferred. Observability is covered by the `goal.*` audit wire records and
+  `Session.getGoal()`; the headless path reads terminal status directly. A `goal.*` SDK event set
+  is a clean follow-up but not required for the working interactive + headless feature.
+- **Stale injected reminders**: accepted. `GoalInjector` is active-goal-gated, so replay of old
+  `context.append_message` records restores history without producing a *new* reminder when no
+  goal is active; each fresh reminder is a runtime snapshot. Dedupe/replace is a future refinement.
+- **Repeated `goal_continuation` prompts**: accepted as real transcript history for now;
+  compaction/dedupe deferred.
+- **Vague-goal intake**: the TUI `/goal` path stays deterministic (Phase 2); model-assisted intake
+  via `CreateGoal` remains available but is not auto-routed. Any switch would be a new phase.
+- **Budget defaults**: `DEFAULT_GOAL_TURN_BUDGET = 20` remains the only default safety cap; no
+  default token/wall-clock budgets added.
+- **Evaluator model**: still the main-agent `llm` with a constructor seam
+  (`Agent.goalEvaluatorFactory`) for a future lightweight judge.
+- **Terminal snapshot retention & context-clear**: terminal goals persist until `/goal clear` or
+  replacement; `/clear` (context) does not touch `metadata.custom.goal` — goal state is
+  session-level, independent of agent context.
+
+## Result
+
+All 10 phases (1a–6) complete. Feature is behind `KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND`
+(default off), documented in `docs/en/configuration/env-vars.md`.
