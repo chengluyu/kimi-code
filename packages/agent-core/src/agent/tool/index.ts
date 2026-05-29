@@ -4,6 +4,7 @@ import picomatch from 'picomatch';
 
 import type { Agent } from '..';
 import { makeErrorPayload } from '../../errors';
+import { flags } from '../../flags';
 import type { ExecutableTool } from '../../loop';
 import { createMcpAuthTool } from '../../mcp/auth-tool';
 import type { McpConnectionManager, McpServerEntry } from '../../mcp';
@@ -373,6 +374,16 @@ export class ToolManager {
           new b.ReadMediaFileTool(kaos, workspace, modelCapabilities, videoUploader),
         new b.EnterPlanModeTool(this.agent),
         new b.ExitPlanModeTool(this.agent),
+        // Goal tools are main-agent-only and gated by the goal-command flag.
+        flags.enabled('goal-command') &&
+          this.agent.type === 'main' &&
+          new b.CreateGoalTool(this.agent),
+        flags.enabled('goal-command') &&
+          this.agent.type === 'main' &&
+          new b.GetGoalTool(this.agent),
+        flags.enabled('goal-command') &&
+          this.agent.type === 'main' &&
+          new b.UpdateGoalTool(this.agent),
         this.agent.rpc?.requestQuestion && new b.AskUserQuestionTool(this.agent),
         new b.TodoListTool(this.toolStore),
         new b.TaskListTool(background),

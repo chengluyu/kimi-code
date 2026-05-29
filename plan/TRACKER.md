@@ -15,9 +15,9 @@ coding agent, following the phase plans in this directory.
 |-------|-------|--------|--------|
 | 1a | Core session goal state | ✅ | 040a06c |
 | 1b | Goal audit and resume lifecycle | ✅ | 70ee3c6 |
-| 2  | SDK API and `/goal` command surface | ✅ | (this commit) |
-| 3  | Model goal tools | 🟡 | — |
-| 4a | Goal context injection | ⬜ | — |
+| 2  | SDK API and `/goal` command surface | ✅ | c14b025 |
+| 3  | Model goal tools | ✅ | (this commit) |
+| 4a | Goal context injection | 🟡 | — |
 | 4b | Goal usage accounting | ⬜ | — |
 | 4c | Goal continuation loop | ⬜ | — |
 | 4d | Goal evaluator | ⬜ | — |
@@ -72,3 +72,14 @@ coding agent, following the phase plans in this directory.
 - The plan's SDK test direction ("forwards the right payload to SDKRpcClient") is implemented as a
   focused `Session`-with-stub-rpc unit test rather than a full harness round-trip, which is faster
   and directly asserts payload shape. Full end-to-end dispatch is covered in Phase 5.
+
+### Phase 3
+
+- Added `CreateGoalTool`/`GetGoalTool`/`UpdateGoalTool` under `tools/builtin/goal/` with `.md`
+  descriptions and a shared main-agent/store guard. `UpdateGoal` records a model report (no
+  direct terminal change). Errors converted to `isError` results with the typed code.
+- `ToolManager.initializeBuiltinTools()` registers the three only when
+  `flags.enabled('goal-command')` and `agent.type === 'main'`; profile `agent.yaml` lists them
+  (subagent profiles do not).
+- Tests: tools/goal.test.ts (registration gate via flag env + tool behavior), profile test.
+  Full agent-core suite (2300) green; typecheck clean.
