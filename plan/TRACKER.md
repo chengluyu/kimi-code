@@ -14,9 +14,9 @@ coding agent, following the phase plans in this directory.
 | Phase | Title | Status | Commit |
 |-------|-------|--------|--------|
 | 1a | Core session goal state | ✅ | 040a06c |
-| 1b | Goal audit and resume lifecycle | ✅ | (this commit) |
-| 2  | SDK API and `/goal` command surface | 🟡 | — |
-| 3  | Model goal tools | ⬜ | — |
+| 1b | Goal audit and resume lifecycle | ✅ | 70ee3c6 |
+| 2  | SDK API and `/goal` command surface | ✅ | (this commit) |
+| 3  | Model goal tools | 🟡 | — |
 | 4a | Goal context injection | ⬜ | — |
 | 4b | Goal usage accounting | ⬜ | — |
 | 4c | Goal continuation loop | ⬜ | — |
@@ -53,3 +53,22 @@ coding agent, following the phase plans in this directory.
   runs `normalizeMetadata()` after `readMetadata()` on resume (active → paused).
 - `goal.account_usage` uses `usageKind: 'token' | 'wall_clock'`. 62 goal/records tests pass;
   full agent-core suite (2281) green; typecheck clean.
+
+### Phase 2
+
+- Added `goal-command` experimental flag (`KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND`, default off).
+- `SessionAPI`/`CoreAPI` gained session-scoped `createGoal`/`getGoal`/`pauseGoal`/`resumeGoal`/
+  `cancelGoal`/`clearGoal` (sessionId only, no agentId); core-api re-exports goal value types;
+  `SessionAPIImpl` + `CoreImpl` delegate to `session.goals`.
+- node-sdk: re-exported goal types; `SDKRpcClient` + `Session` forwarding methods (no public
+  `updateGoal`).
+- App: new `commands/goal.ts` deterministic parser + `handleGoalCommand`; registered behind
+  `goal-command` with subcommand-aware availability; wired into dispatch/index.
+- Tests: goal.test.ts (44 w/ registry+resolve), session-goal.test.ts (7). All typechecks pass;
+  still no agent-core imports in app src.
+
+### Detour note (Phase 2)
+
+- The plan's SDK test direction ("forwards the right payload to SDKRpcClient") is implemented as a
+  focused `Session`-with-stub-rpc unit test rather than a full harness round-trip, which is faster
+  and directly asserts payload shape. Full end-to-end dispatch is covered in Phase 5.

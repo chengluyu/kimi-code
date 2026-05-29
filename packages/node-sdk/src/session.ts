@@ -4,6 +4,9 @@ import type { SDKRpcClient } from '#/rpc';
 import type {
   BackgroundTaskInfo,
   CompactOptions,
+  CreateGoalInput,
+  GoalSnapshot,
+  GoalToolResult,
   McpServerInfo,
   McpStartupMetrics,
   PermissionMode,
@@ -266,6 +269,40 @@ export class Session {
       sessionId: this.id,
       taskId: trimmedTaskId,
     });
+  }
+
+  // --- Goal lifecycle ---------------------------------------------------
+  // Deterministic user/host control surface. Model-driven terminal updates go
+  // through the `UpdateGoal` tool, so there is intentionally no `updateGoal`.
+
+  async createGoal(input: CreateGoalInput): Promise<GoalSnapshot> {
+    this.ensureOpen();
+    return this.rpc.createGoal({ sessionId: this.id, ...input });
+  }
+
+  async getGoal(): Promise<GoalToolResult> {
+    this.ensureOpen();
+    return this.rpc.getGoal({ sessionId: this.id });
+  }
+
+  async pauseGoal(input: { reason?: string } = {}): Promise<GoalSnapshot> {
+    this.ensureOpen();
+    return this.rpc.pauseGoal({ sessionId: this.id, reason: input.reason });
+  }
+
+  async resumeGoal(input: { reason?: string } = {}): Promise<GoalSnapshot> {
+    this.ensureOpen();
+    return this.rpc.resumeGoal({ sessionId: this.id, reason: input.reason });
+  }
+
+  async cancelGoal(input: { reason?: string } = {}): Promise<GoalSnapshot> {
+    this.ensureOpen();
+    return this.rpc.cancelGoal({ sessionId: this.id, reason: input.reason });
+  }
+
+  async clearGoal(input: { reason?: string } = {}): Promise<void> {
+    this.ensureOpen();
+    return this.rpc.clearGoal({ sessionId: this.id, reason: input.reason });
   }
 
   async listMcpServers(): Promise<readonly McpServerInfo[]> {

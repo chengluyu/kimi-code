@@ -5,7 +5,9 @@ import type {
   BeginCompactionPayload,
   CancelPayload,
   CancelPlanPayload,
+  CreateGoalPayload,
   EmptyPayload,
+  GoalControlPayload,
   GetBackgroundOutputPathPayload,
   GetBackgroundOutputPayload,
   GetBackgroundPayload,
@@ -103,6 +105,32 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   generateAgentsMd(_payload: EmptyPayload): Promise<void> {
     return this.session.generateAgentsMd();
+  }
+
+  // --- Goal lifecycle (delegates to the session goal store) -------------
+
+  createGoal(payload: CreateGoalPayload) {
+    return this.session.goals.createGoal({ ...payload, actor: 'user' });
+  }
+
+  getGoal(_payload: EmptyPayload) {
+    return this.session.goals.getGoal();
+  }
+
+  pauseGoal(payload: GoalControlPayload) {
+    return this.session.goals.pauseGoal({ actor: 'user', reason: payload.reason });
+  }
+
+  resumeGoal(payload: GoalControlPayload) {
+    return this.session.goals.resumeGoal({ actor: 'user', reason: payload.reason });
+  }
+
+  cancelGoal(payload: GoalControlPayload) {
+    return this.session.goals.cancelGoal({ actor: 'user', reason: payload.reason });
+  }
+
+  clearGoal(payload: GoalControlPayload) {
+    return this.session.goals.clearGoal({ actor: 'user', reason: payload.reason });
   }
 
   async prompt({ agentId, ...payload }: AgentScopedPayload<PromptPayload>) {

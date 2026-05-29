@@ -33,6 +33,7 @@ import {
   showPermissionPicker,
   showSettingsSelector,
 } from './config';
+import { handleGoalCommand } from './goal';
 import { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
 import { handlePluginsCommand } from './plugins';
 import {
@@ -71,6 +72,7 @@ export {
   showUsage,
 } from './info';
 export { handlePluginsCommand } from './plugins';
+export { handleGoalCommand } from './goal';
 export {
   handleExportDebugZipCommand,
   handleExportMdCommand,
@@ -257,6 +259,9 @@ async function handleBuiltInSlashCommand(
       return;
     case 'compact':
       await handleCompactCommand(host, args);
+      return;
+    case 'goal':
+      await handleGoalCommand(host, args);
       return;
     case 'init':
       await handleInitCommand(host);

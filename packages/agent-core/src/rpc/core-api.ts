@@ -7,6 +7,16 @@ import type { KimiConfig, KimiConfigPatch } from '#/config';
 import type { ExperimentalFlagMap } from '#/flags';
 import type { ResumeSessionResult } from '#/rpc/resumed';
 import type { SessionMeta } from '#/session';
+import type {
+  CreateGoalInput,
+  GoalBudgetLimits,
+  GoalBudgetReport,
+  GoalEvidence,
+  GoalSnapshot,
+  GoalStatus,
+  GoalToolResult,
+  UpdateGoalControlInput,
+} from '#/session/goal';
 import type { BackgroundTaskInfo } from '#/tools/builtin';
 import type { ContentPart } from '@moonshot-ai/kosong';
 
@@ -251,6 +261,31 @@ export interface UpdateSessionMetadataPayload {
   readonly metadata: SessionMetadataPatch;
 }
 
+// Goal lifecycle payloads and re-exported goal value types. These describe the
+// deterministic user/SDK control surface; model-driven terminal updates go
+// through the `UpdateGoal` tool, not this API.
+export type {
+  CreateGoalInput,
+  GoalBudgetLimits,
+  GoalBudgetReport,
+  GoalEvidence,
+  GoalSnapshot,
+  GoalStatus,
+  GoalToolResult,
+  UpdateGoalControlInput,
+};
+
+export interface CreateGoalPayload {
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly budgetLimits?: GoalBudgetLimits;
+  readonly replace?: boolean;
+}
+
+export interface GoalControlPayload {
+  readonly reason?: string;
+}
+
 export interface GetKimiConfigPayload {
   readonly reload?: boolean;
 }
@@ -302,6 +337,13 @@ export interface SessionAPI extends AgentAPIWithId {
   getMcpStartupMetrics: (payload: EmptyPayload) => McpStartupMetrics;
   reconnectMcpServer: (payload: ReconnectMcpServerPayload) => void;
   generateAgentsMd: (payload: EmptyPayload) => void;
+  // Goal lifecycle (session-scoped; no agentId required). CoreAPI adds sessionId.
+  createGoal: (payload: CreateGoalPayload) => GoalSnapshot;
+  getGoal: (payload: EmptyPayload) => GoalToolResult;
+  pauseGoal: (payload: GoalControlPayload) => GoalSnapshot;
+  resumeGoal: (payload: GoalControlPayload) => GoalSnapshot;
+  cancelGoal: (payload: GoalControlPayload) => GoalSnapshot;
+  clearGoal: (payload: GoalControlPayload) => void;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;

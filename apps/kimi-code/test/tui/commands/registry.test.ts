@@ -72,6 +72,20 @@ describe('built-in slash command registry', () => {
     ]);
   });
 
+  it('registers goal behind the goal-command flag with subcommand-aware availability', () => {
+    const goal = findBuiltInSlashCommand('goal');
+    expect(goal).toBeDefined();
+    expect((goal as KimiSlashCommand).experimentalFlag).toBe('goal-command');
+    expect(resolveSlashCommandAvailability(goal!, '')).toBe('always');
+    expect(resolveSlashCommandAvailability(goal!, 'status')).toBe('always');
+    expect(resolveSlashCommandAvailability(goal!, 'pause')).toBe('always');
+    expect(resolveSlashCommandAvailability(goal!, 'cancel')).toBe('always');
+    expect(resolveSlashCommandAvailability(goal!, 'clear')).toBe('always');
+    expect(resolveSlashCommandAvailability(goal!, 'resume')).toBe('idle-only');
+    expect(resolveSlashCommandAvailability(goal!, 'Ship feature X')).toBe('idle-only');
+    expect(resolveSlashCommandAvailability(goal!, 'replace Ship feature Y')).toBe('idle-only');
+  });
+
   it('contains the expected command names once', () => {
     const names = BUILTIN_SLASH_COMMANDS.map((command) => command.name);
 

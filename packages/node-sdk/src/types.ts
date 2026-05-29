@@ -22,7 +22,14 @@ export type {
   BackgroundTaskKind,
   BackgroundTaskStatus,
   ContextMessage,
+  CreateGoalInput,
   ExportSessionManifest,
+  GoalBudgetLimits,
+  GoalBudgetReport,
+  GoalEvidence,
+  GoalSnapshot,
+  GoalStatus,
+  GoalToolResult,
   KimiConfig,
   KimiConfigPatch,
   LoopControl,
@@ -47,6 +54,7 @@ export type {
   SkillSummary,
   ThinkingConfig,
   ToolInfo,
+  UpdateGoalControlInput,
 } from '@moonshot-ai/agent-core';
 
 export type { KimiHostIdentity, OAuthRefreshOutcome };
