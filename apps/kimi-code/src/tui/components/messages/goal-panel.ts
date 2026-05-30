@@ -117,7 +117,7 @@ function statusHex(status: GoalStatus, colors: ColorPalette): string {
     case 'impossible':
     case 'error':
       return colors.error;
-    default: // paused, interrupted, cancelled
+    default: // paused, cancelled
       return colors.textDim;
   }
 }

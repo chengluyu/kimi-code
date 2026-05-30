@@ -23,7 +23,9 @@ export interface HeadlessGoalCreate {
 
 /**
  * Distinct exit codes per terminal goal status. `complete` (and an absent goal,
- * which should not happen on the create path) map to success.
+ * which should not happen on the create path) map to success. A turn abort
+ * (e.g. SIGINT) parks the goal as `paused` — not complete — so it maps to its
+ * own non-zero code rather than success.
  */
 export const GOAL_EXIT_CODES = {
   complete: 0,
@@ -31,7 +33,7 @@ export const GOAL_EXIT_CODES = {
   blocked: 3,
   impossible: 4,
   budget_limited: 5,
-  interrupted: 6,
+  paused: 6,
   cancelled: 7,
 } as const;
 
@@ -43,8 +45,8 @@ export function goalExitCode(status: string | undefined): number {
       return GOAL_EXIT_CODES.impossible;
     case 'budget_limited':
       return GOAL_EXIT_CODES.budget_limited;
-    case 'interrupted':
-      return GOAL_EXIT_CODES.interrupted;
+    case 'paused':
+      return GOAL_EXIT_CODES.paused;
     case 'cancelled':
       return GOAL_EXIT_CODES.cancelled;
     case 'error':

@@ -442,7 +442,7 @@ describe('GoalContinuationController turn integration', () => {
     expect(store.getGoal().goal!.status).toBe('error');
   });
 
-  it('marks an active goal interrupted when the turn is cancelled', async () => {
+  it('pauses an active goal (resumable, not terminal) when the turn is cancelled', async () => {
     process.env[GOAL_FLAG] = 'true';
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
@@ -467,7 +467,7 @@ describe('GoalContinuationController turn integration', () => {
     await ctx.rpc.cancel({});
     await ended;
 
-    expect(store.getGoal().goal!.status).toBe('interrupted');
+    expect(store.getGoal().goal!.status).toBe('paused');
   });
 
   it('gives the external Stop hook one continuation without capping goal continuations', async () => {

@@ -131,7 +131,7 @@ describe('UpdateGoalTool', () => {
     for (const status of ['complete', 'blocked', 'impossible']) {
       expect(UpdateGoalToolInputSchema.safeParse({ status, reason: 'r' }).success).toBe(true);
     }
-    for (const status of ['active', 'paused', 'cancelled', 'budget_limited', 'interrupted', 'error']) {
+    for (const status of ['active', 'paused', 'cancelled', 'budget_limited', 'error']) {
       expect(UpdateGoalToolInputSchema.safeParse({ status, reason: 'r' }).success).toBe(false);
     }
   });

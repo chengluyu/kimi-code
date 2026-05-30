@@ -100,7 +100,7 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
   - Add a `{ type: 'goal'; change: GoalChange }` variant to `AgentReplayRecord`; during record
     restore (`agent/records/index.ts`, currently a no-op for `goal.*`), `replayBuilder.push` a goal
     change derived from `goal.update` (lifecycle paused/resumed/cancelled; terminal complete/blocked/
-    impossible/budget_limited/interrupted/error) and `goal.evaluate` (verdict). Use the
+    impossible/budget_limited/error) and `goal.evaluate` (verdict). Use the
     `turnsUsed`/`tokensUsed`/`wallClockMs` already added to `goal.update` (6a) for stats.
   - In `SessionReplayRenderer.renderRecord`, handle the `goal` case → `buildGoalMarker` for
     lifecycle/verdict; for terminal render a **stats-only completion card** (decided): a box titled
@@ -204,6 +204,29 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
   new goal or raise its budget" — then stays quiet so it never nags; paused goals remain silent.
 - **Tests:** terminal goal announces once then is silent on the next boundary. agent-core suite
   (2365) green; typecheck + lint OK.
+
+### Fix: Esc no longer kills a goal — aborted turn pauses (resumable) instead of `interrupted`
+
+- **Symptom / design mistake:** pressing Esc during an active goal (e.g. to move the laptop and keep
+  working) marked the goal **terminally** `interrupted` — no cure for regret, the goal was dead and
+  had to be re-issued.
+- **Insight:** the goal loop only advances inside one live `runTurn`, so "the turn died" is the same
+  condition whether by Esc or by process restart. `normalizeMetadata` already handles the restart
+  case by demoting an `active` goal to `paused` (resumable via `/goal resume`). `interrupted` was
+  just the *same situation reached by a different door*, routed to a dead-end — an inconsistency, not
+  a needed state.
+- **Fix:** removed the `interrupted` `GoalStatus` entirely (union, `TERMINAL_STATUSES`,
+  `ALL_GOAL_STATUSES`). Replaced `markInterrupted` (terminal) with `pauseOnInterrupt` (parks an
+  active goal as `paused`, emits a `lifecycle` change so the marker/badge update, no-ops for a
+  non-active goal). Both `turn/index.ts` abort sites (the normal `'aborted'` return and the
+  `isAbortError` catch) now call it. A user Esc and a system/shutdown abort are deliberately *not*
+  distinguished — both pause, both resumable. Headless: the freed exit code `6` is repurposed
+  `interrupted → paused` (an aborted/SIGINT'd headless goal parks as `paused`, still non-zero, not
+  success). TUI status-color grouping dropped `interrupted` from the dim bucket.
+- **Tests:** `pauseOnInterrupt` parks-as-paused + emits lifecycle change + stays resumable; no-ops
+  for non-active; continuation cancel test now asserts `paused`; `updateGoal`-reject and exit-code
+  lists updated. agent-core (101 goal/tools/continuation) + app (goal-prompt/panel/markers) green;
+  all three typechecks + lint (0 errors) clean.
 
 ## Detours / Notes
 

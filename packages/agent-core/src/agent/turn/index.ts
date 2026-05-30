@@ -242,10 +242,10 @@ export class TurnFlow {
       } else {
         const stopReason = await this.runTurn(turnId, signal, startedAt);
         completedStopReason = stopReason;
-        // An aborted run returns normally (the loop swallows the abort); mark an
-        // active goal interrupted here since no exception reaches the catch below.
+        // An aborted run returns normally (the loop swallows the abort); pause an
+        // active goal here (resumable) since no exception reaches the catch below.
         if (stopReason === 'aborted' && this.goalRuntimeEnabled) {
-          await this.agent.goals?.markInterrupted({ reason: 'Goal turn was cancelled' });
+          await this.agent.goals?.pauseOnInterrupt({ reason: 'Paused after interruption' });
         }
         ended = {
           type: 'turn.ended',
@@ -260,7 +260,7 @@ export class TurnFlow {
       // already-terminal goal) is never overwritten. Main-agent only.
       if (this.goalRuntimeEnabled) {
         if (isAbortError(error)) {
-          await this.agent.goals?.markInterrupted({ reason: 'Goal turn was cancelled' });
+          await this.agent.goals?.pauseOnInterrupt({ reason: 'Paused after interruption' });
         } else if (isMaxStepsExceededError(error)) {
           // A configured step cap is a budget, not a runtime failure.
           await this.agent.goals?.markBudgetLimited({ reason: 'Model step limit reached' });

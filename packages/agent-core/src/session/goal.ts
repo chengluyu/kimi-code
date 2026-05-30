@@ -35,7 +35,6 @@ export type GoalStatus =
   | 'blocked'
   | 'impossible'
   | 'budget_limited'
-  | 'interrupted'
   | 'error'
   | 'cancelled';
 
@@ -158,7 +157,6 @@ const TERMINAL_STATUSES: ReadonlySet<GoalStatus> = new Set([
   'blocked',
   'impossible',
   'budget_limited',
-  'interrupted',
   'error',
   'cancelled',
 ]);
@@ -217,7 +215,10 @@ export interface SessionGoalStoreOptions {
  * Lifecycle rules:
  * - `updateGoal()` only sets `complete`, `blocked`, or `impossible` (model/evaluator
  *   self-reported terminal states confirmed by the runtime).
- * - Runtime owns `budget_limited`, `interrupted`, `error` via the `mark*` methods.
+ * - Runtime owns `budget_limited` and `error` via the `mark*` methods.
+ * - An aborted turn (Esc / shutdown) is not terminal: it pauses the goal via
+ *   `pauseOnInterrupt`, so it stays resumable via `/goal resume` — mirroring how
+ *   `normalizeMetadata` demotes an `active` goal to `paused` on session resume.
  * - User owns `paused`, `cancelled`, and the `cleared` audit action.
  */
 export class SessionGoalStore {
@@ -450,7 +451,7 @@ export class SessionGoalStore {
     return this.toSnapshot(state);
   }
 
-  // --- Runtime-owned terminal states ------------------------------------
+  // --- Runtime-owned transitions (abort / budget / error) ---------------
 
   async markBudgetLimited(input: {
     reason?: string;
@@ -459,8 +460,23 @@ export class SessionGoalStore {
     return this.markRuntimeTerminal('budget_limited', input.reason, input.evidence);
   }
 
-  async markInterrupted(input: { reason?: string } = {}): Promise<GoalSnapshot | null> {
-    return this.markRuntimeTerminal('interrupted', input.reason);
+  /**
+   * Parks an active goal when its live turn is aborted (Esc, shutdown, or any
+   * other turn-level cancellation). This is **not** terminal: the goal becomes
+   * `paused` and stays resumable via `/goal resume`, mirroring how
+   * `normalizeMetadata` demotes an `active` goal on session resume. No-ops for a
+   * goal that is missing or already non-active, so a user pause / cancel / clear
+   * or an already-terminal goal is never overwritten.
+   */
+  async pauseOnInterrupt(input: { reason?: string } = {}): Promise<GoalSnapshot | null> {
+    const state = this.options.readState();
+    if (state === undefined || state.status !== 'active') return null;
+    this.applyStatus(state, 'paused', 'user', input.reason);
+    await this.persistState(state, {
+      change: { kind: 'lifecycle', status: 'paused', reason: input.reason },
+    });
+    this.appendStatusUpdate(state, 'user', input.reason);
+    return this.toSnapshot(state);
   }
 
   async markError(input: { reason?: string } = {}): Promise<GoalSnapshot | null> {
@@ -763,7 +779,6 @@ const ALL_GOAL_STATUSES: ReadonlySet<string> = new Set<GoalStatus>([
   'blocked',
   'impossible',
   'budget_limited',
-  'interrupted',
   'error',
   'cancelled',
 ]);

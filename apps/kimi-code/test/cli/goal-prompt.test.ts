@@ -34,7 +34,7 @@ describe('goalExitCode', () => {
     expect(goalExitCode('blocked')).toBe(GOAL_EXIT_CODES.blocked);
     expect(goalExitCode('impossible')).toBe(GOAL_EXIT_CODES.impossible);
     expect(goalExitCode('budget_limited')).toBe(GOAL_EXIT_CODES.budget_limited);
-    expect(goalExitCode('interrupted')).toBe(GOAL_EXIT_CODES.interrupted);
+    expect(goalExitCode('paused')).toBe(GOAL_EXIT_CODES.paused);
     expect(goalExitCode('error')).toBe(GOAL_EXIT_CODES.error);
     expect(goalExitCode(undefined)).toBe(0);
     // The distinct codes are unique across the terminal statuses.

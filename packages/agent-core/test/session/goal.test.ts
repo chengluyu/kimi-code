@@ -401,7 +401,7 @@ describe('SessionGoalStore lifecycle', () => {
   it('updateGoal rejects runtime-owned and user-owned statuses', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
-    for (const status of ['active', 'paused', 'cancelled', 'budget_limited', 'interrupted', 'error'] as const) {
+    for (const status of ['active', 'paused', 'cancelled', 'budget_limited', 'error'] as const) {
       await expect(store.updateGoal({ status })).rejects.toMatchObject({
         code: ErrorCodes.GOAL_STATUS_INVALID,
       });
@@ -411,7 +411,6 @@ describe('SessionGoalStore lifecycle', () => {
   it('mark* methods store runtime terminal states', async () => {
     for (const [method, status] of [
       ['markBudgetLimited', 'budget_limited'],
-      ['markInterrupted', 'interrupted'],
       ['markError', 'error'],
     ] as const) {
       const { store } = makeStore();
@@ -428,6 +427,27 @@ describe('SessionGoalStore lifecycle', () => {
     const result = await store.markError({ reason: 'boom' });
     expect(result).toBeNull();
     expect(store.getGoal().goal?.status).toBe('paused');
+  });
+
+  it('pauseOnInterrupt parks an active goal as paused (resumable, not terminal)', async () => {
+    const { store, changes } = makeStore();
+    await store.createGoal({ objective: 'work' });
+    const snap = await store.pauseOnInterrupt({ reason: 'Paused after interruption' });
+    expect(snap?.status).toBe('paused');
+    // Emits a lifecycle change so the transcript marker / footer badge update.
+    expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'paused' });
+    // The goal stays resumable rather than dead-ending in a terminal state.
+    const resumed = await store.resumeGoal();
+    expect(resumed.status).toBe('active');
+  });
+
+  it('pauseOnInterrupt no-ops for a non-active goal', async () => {
+    const { store } = makeStore();
+    await store.createGoal({ objective: 'work' });
+    await store.markError({ reason: 'boom' });
+    const result = await store.pauseOnInterrupt({ reason: 'Paused after interruption' });
+    expect(result).toBeNull();
+    expect(store.getGoal().goal?.status).toBe('error');
   });
 
   it('cancelGoal clears the current goal', async () => {
