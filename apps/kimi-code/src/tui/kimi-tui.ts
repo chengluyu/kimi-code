@@ -296,10 +296,17 @@ export class KimiTUI {
   }
 
   private setupAutocomplete(): void {
-    const slashCommands: SlashCommand[] = this.getSlashCommands().map((cmd) => ({
-      name: cmd.name,
-      description: cmd.description,
-    }));
+    const slashCommands: SlashCommand[] = this.getSlashCommands().map((cmd) => {
+      const completer = cmd.completeArgs;
+      return {
+        name: cmd.name,
+        description: cmd.description,
+        ...(cmd.argumentHint !== undefined ? { argumentHint: cmd.argumentHint } : {}),
+        ...(completer !== undefined
+          ? { getArgumentCompletions: (prefix: string) => completer(prefix) }
+          : {}),
+      };
+    });
     const provider = new FileMentionProvider(
       slashCommands,
       this.state.appState.workDir,

@@ -1,4 +1,25 @@
+import type { AutocompleteItem } from '@earendil-works/pi-tui';
+
+import { completeLeadingArg, type ArgCompletionSpec } from './complete-args';
 import type { KimiSlashCommand, SlashCommandAvailability } from './types';
+
+/** Subcommands and budget flags offered when autocompleting `/goal <…>`. */
+const GOAL_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'status', description: 'Show the current goal' },
+  { value: 'pause', description: 'Pause the active goal' },
+  { value: 'resume', description: 'Resume a paused goal' },
+  { value: 'cancel', description: 'Cancel the active goal' },
+  { value: 'clear', description: 'Remove the current goal' },
+  { value: 'replace', description: 'Replace the current goal with a new objective' },
+  { value: '--max-turns', description: 'Stop after N continuation turns' },
+  { value: '--max-tokens', description: 'Stop after N tokens' },
+  { value: '--max-minutes', description: 'Stop after N minutes' },
+];
+
+/** Argument autocompletion for the `/goal` command (subcommands + budget flags). */
+export function goalArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(GOAL_ARG_COMPLETIONS, argumentPrefix);
+}
 
 export const BUILTIN_SLASH_COMMANDS = [
   {
@@ -94,6 +115,8 @@ export const BUILTIN_SLASH_COMMANDS = [
     description: 'Start or manage an autonomous goal',
     priority: 80,
     experimentalFlag: 'goal-command',
+    argumentHint: '<objective> | status | pause | resume | cancel | clear | replace',
+    completeArgs: goalArgumentCompletions,
     // status / pause / cancel / clear are always available; creation, replacement,
     // and resume start (or restart) a turn and so are idle-only.
     availability: (args) => {

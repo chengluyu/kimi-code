@@ -23,6 +23,29 @@ coding agent, following the phase plans in this directory.
 | 4d | Goal evaluator | ✅ | d0dc822 |
 | 5  | End-to-end integration and gates | ✅ | 674b2c1 |
 | 6  | Headless goal mode and hardening | ✅ | abb938d |
+| 7  | Goal UX and budget model | 🟡 | see below |
+
+## Phase 7: Goal UX and budget model
+
+Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
+
+| # | Commit | Status | Hash |
+|---|--------|--------|------|
+| 1 | Generic subcommand autocomplete (`/goal` subcommands + flags) | ✅ | — |
+| 2 | Budget model: drop default turn cap, surface counters to evaluator | ⬜ | — |
+| 3 | `goal.updated` event spine + terminal stats on `goal.update` record | ⬜ | — |
+| 4 | Footer badge | ⬜ | — |
+| 5 | `/goal` status box | ⬜ | — |
+| 6 | Transcript markers + completion card (live + resume) | ⬜ | — |
+
+- **Commit 1:** added a generic `completeArgs` capability to the slash-command registry
+  (`KimiSlashCommand.completeArgs`, generic `completeLeadingArg` helper), wired `/goal` to
+  offer `status`/`pause`/`resume`/`cancel`/`clear`/`replace` + `--max-*` flags, and forwarded
+  it to pi-tui's `getArgumentCompletions` in `setupAutocomplete`. The goal completion spec
+  lives in `registry.ts` (metadata layer) so it imports only the leaf `complete-args.ts` and
+  never pulls the command handler / SDK into the widely-imported registry. Note: full-suite
+  parallel runs flake on timing-sensitive TUI/telemetry tests under CPU contention (reproduces
+  on baseline); `--no-file-parallelism` is green (1059 passed).
 
 ## Post-implementation fixes
 

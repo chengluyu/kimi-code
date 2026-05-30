@@ -1,7 +1,13 @@
 import { ErrorCodes, KimiError } from '@moonshot-ai/kimi-code-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { dispatchInput, handleGoalCommand, parseGoalCommand, setExperimentalFlags } from '#/tui/commands/index';
+import {
+  dispatchInput,
+  goalArgumentCompletions,
+  handleGoalCommand,
+  parseGoalCommand,
+  setExperimentalFlags,
+} from '#/tui/commands/index';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
 
 function fakeSnapshot() {
@@ -268,5 +274,51 @@ describe('dispatchInput /goal integration', () => {
       expect(host.sendNormalUserInput).toHaveBeenCalledWith('/goal Ship feature X');
     });
     expect(session.createGoal).not.toHaveBeenCalled();
+  });
+});
+
+describe('goalArgumentCompletions', () => {
+  function values(prefix: string): string[] | null {
+    const items = goalArgumentCompletions(prefix);
+    return items === null ? null : items.map((i) => i.value);
+  }
+
+  it('offers every subcommand and budget flag for an empty prefix', () => {
+    expect(values('')).toEqual([
+      'status',
+      'pause',
+      'resume',
+      'cancel',
+      'clear',
+      'replace',
+      '--max-turns',
+      '--max-tokens',
+      '--max-minutes',
+    ]);
+  });
+
+  it('prefix-filters subcommands case-insensitively', () => {
+    expect(values('pa')).toEqual(['pause']);
+    expect(values('RE')).toEqual(['resume', 'replace']);
+  });
+
+  it('prefix-filters budget flags', () => {
+    expect(values('--max-t')).toEqual(['--max-turns', '--max-tokens']);
+  });
+
+  it('returns items whose value/label are the token itself', () => {
+    const items = goalArgumentCompletions('pause');
+    expect(items).toEqual([
+      { value: 'pause', label: 'pause', description: 'Pause the active goal' },
+    ]);
+  });
+
+  it('stops completing once past the first token (space typed)', () => {
+    expect(values('pause ')).toBeNull();
+    expect(values('replace Ship feature')).toBeNull();
+  });
+
+  it('returns null when nothing matches', () => {
+    expect(values('zzz')).toBeNull();
   });
 });
