@@ -1,5 +1,7 @@
-import { ErrorCodes, isKimiError, type GoalSnapshot } from '@moonshot-ai/kimi-code-sdk';
+import { ErrorCodes, isKimiError } from '@moonshot-ai/kimi-code-sdk';
 
+import { buildGoalReportLines, goalPanelTitle } from '../components/messages/goal-panel';
+import { UsagePanelComponent } from '../components/messages/usage-panel';
 import { LLM_NOT_SET_MESSAGE } from '../constant/kimi-tui';
 import { formatErrorMessage } from '../utils/event-payload';
 import type { SlashCommandHost } from './dispatch';
@@ -201,42 +203,10 @@ async function showGoalStatus(host: SlashCommandHost): Promise<void> {
     host.showStatus('No goal set. Start one with `/goal <objective>`.');
     return;
   }
-  host.showStatus(formatGoalStatus(goal));
-}
-
-function formatGoalStatus(goal: GoalSnapshot): string {
-  const lines: string[] = [];
-  lines.push(`Goal [${goal.status}]: ${goal.objective}`);
-  if (goal.completionCriterion !== undefined) {
-    lines.push(`Completion criterion: ${goal.completionCriterion}`);
-  }
-  const budget = goal.budget;
-  const turnPart =
-    budget.turnBudget === null
-      ? `turns: ${goal.turnsUsed}`
-      : `turns: ${goal.turnsUsed}/${budget.turnBudget}`;
-  const tokenPart =
-    budget.tokenBudget === null
-      ? `tokens: ${goal.tokensUsed}`
-      : `tokens: ${goal.tokensUsed}/${budget.tokenBudget}`;
-  lines.push(`${turnPart}, ${tokenPart}, time: ${formatDuration(goal.wallClockMs)}`);
-  if (budget.wallClockBudgetMs !== null) {
-    lines.push(`time budget: ${formatDuration(budget.wallClockBudgetMs)}`);
-  }
-  if (budget.overBudget) lines.push('Budget reached.');
-  if (goal.terminalReason !== undefined) lines.push(`Reason: ${goal.terminalReason}`);
-  if (goal.lastEvaluatorVerdict !== undefined) {
-    lines.push(`Last evaluator verdict: ${goal.lastEvaluatorVerdict}`);
-  }
-  return lines.join('\n');
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+  const lines = buildGoalReportLines({ colors: host.state.theme.colors, goal });
+  const panel = new UsagePanelComponent(lines, host.state.theme.colors.primary, goalPanelTitle(goal));
+  host.state.transcriptContainer.addChild(panel);
+  host.state.ui.requestRender();
 }
 
 function isStreaming(host: SlashCommandHost): boolean {

@@ -35,7 +35,7 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
 | 2 | Budget model: drop default turn cap, surface counters to evaluator | ✅ | — |
 | 3 | `goal.updated` event spine + terminal stats on `goal.update` record | 🟡 | cc35725 |
 | 4 | Footer badge | ✅ | cc35725 |
-| 5 | `/goal` status box | ⬜ | — |
+| 5 | `/goal` status box | ✅ | — |
 | 6 | Transcript markers + completion card (live + resume) | ⬜ | — |
 
 - **Commit 1:** added a generic `completeArgs` capability to the slash-command registry
@@ -66,6 +66,14 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
   the `change` payload (verdict/lifecycle/terminal detail) and terminal stats on the `goal.update`
   record, which the transcript markers + completion card need. agent-core 2368, node-sdk 153, app
   1065 (sequential), all typechecks + lint clean.
+- **Commit 5:** `/goal status` (and bare `/goal`) now renders a boxed panel instead of plain text.
+  New `components/messages/goal-panel.ts` builds the lines (objective as a `▌` blockquote, then
+  `Running` / `Turns` / `Tokens` / `Evaluator`, plus a `Stop` row when budgeted or a dim "No stop
+  condition — runs until evaluated complete" note when not; terminal goals get a `Status` row and no
+  `Stop` row), reusing the existing `UsagePanelComponent` box (same chrome as `/usage`), titled
+  `Goal · <status>`. Removed the old plain-text `formatGoalStatus`/`formatDuration`. Tests:
+  `buildGoalReportLines` content (active/budgeted/terminal/criterion/verdict/long-objective).
+  app 1073 (sequential), typecheck + lint clean.
 
 ## Post-implementation fixes
 
