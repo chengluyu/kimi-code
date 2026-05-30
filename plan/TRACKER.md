@@ -33,10 +33,12 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
 |---|--------|--------|------|
 | 1 | Generic subcommand autocomplete (`/goal` subcommands + flags) | ✅ | 7cbb37f |
 | 2 | Budget model: drop default turn cap, surface counters to evaluator | ✅ | — |
-| 3 | `goal.updated` event spine + terminal stats on `goal.update` record | 🟡 | cc35725 |
+| 3 | `goal.updated` event spine + terminal stats on `goal.update` record | ✅ | cc35725, 6a |
 | 4 | Footer badge | ✅ | cc35725 |
-| 5 | `/goal` status box | ✅ | — |
-| 6 | Transcript markers + completion card (live + resume) | ⬜ | — |
+| 5 | `/goal` status box | ✅ | e65abcb |
+| 6a | `goal.updated` change payload + terminal stats on record | ✅ | — |
+| 6b | Transcript markers + completion card (live) | ⬜ | — |
+| 6c | Transcript markers + completion card (resume) | ⬜ | — |
 
 - **Commit 1:** added a generic `completeArgs` capability to the slash-command registry
   (`KimiSlashCommand.completeArgs`, generic `completeLeadingArg` helper), wired `/goal` to
@@ -74,6 +76,15 @@ Plan: `plan/phase-07-goal-ux-and-budget.md`. Sequenced commits:
   `Goal · <status>`. Removed the old plain-text `formatGoalStatus`/`formatDuration`. Tests:
   `buildGoalReportLines` content (active/budgeted/terminal/criterion/verdict/long-objective).
   app 1073 (sequential), typecheck + lint clean.
+- **Commit 6a (finishes 3):** enriched `goal.updated` with an optional `change` (`GoalChange`:
+  kind `lifecycle`/`verdict`/`terminal`, plus status/verdict/reason/evidence/stats), emitted from the
+  store via `persistState({ change })` on the relevant mutations (lifecycle: pause/resume/cancel;
+  verdict: evaluator verdict; terminal: updateGoal + runtime terminals — with a counter `stats`
+  snapshot); create/turn-increment/report stay snapshot-only. Added terminal usage counters
+  (`turnsUsed`/`tokensUsed`/`wallClockMs`) to the `goal.update` audit record for resume
+  reconstruction. Re-exported `GoalChange`/`GoalChangeStats` through agent-core (`core-api`) and the
+  SDK. Tests: store emits typed change for lifecycle/verdict/terminal and none for snapshot-only.
+  agent-core 2369, node-sdk 153, typecheck + lint clean. Live rendering is Commit 6b; resume 6c.
 
 ## Post-implementation fixes
 

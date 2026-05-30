@@ -26,6 +26,8 @@ export type {
   ExportSessionManifest,
   GoalBudgetLimits,
   GoalBudgetReport,
+  GoalChange,
+  GoalChangeStats,
   GoalEvidence,
   GoalSnapshot,
   GoalStatus,

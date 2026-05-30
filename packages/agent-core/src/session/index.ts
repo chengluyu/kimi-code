@@ -142,8 +142,8 @@ export class Session {
         return this.writeMetadata();
       },
       auditSink: () => this.agents.get('main')?.records,
-      onGoalUpdated: (snapshot) => {
-        void this.rpc.emitEvent({ type: 'goal.updated', agentId: 'main', snapshot });
+      onGoalUpdated: (snapshot, change) => {
+        void this.rpc.emitEvent({ type: 'goal.updated', agentId: 'main', snapshot, change });
       },
     });
     this.skills = new SkillRegistry({ sessionId: options.id });

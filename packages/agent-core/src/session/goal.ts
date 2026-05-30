@@ -130,6 +130,29 @@ export interface GoalToolResult {
   readonly goal: GoalSnapshot | null;
 }
 
+/** Snapshot of the goal's usage counters at the moment of a change. */
+export interface GoalChangeStats {
+  readonly turnsUsed: number;
+  readonly tokensUsed: number;
+  readonly wallClockMs: number;
+}
+
+/**
+ * Describes what changed on a `goal.updated` event, so the UI can render a
+ * transcript marker (lifecycle/verdict) or a completion card (terminal). Absent
+ * for snapshot-only refreshes (e.g. a turn increment that only moves the badge).
+ */
+export type GoalChangeKind = 'lifecycle' | 'verdict' | 'terminal';
+
+export interface GoalChange {
+  readonly kind: GoalChangeKind;
+  readonly status?: GoalStatus;
+  readonly verdict?: string;
+  readonly reason?: string;
+  readonly evidence?: readonly GoalEvidence[];
+  readonly stats?: GoalChangeStats;
+}
+
 const TERMINAL_STATUSES: ReadonlySet<GoalStatus> = new Set([
   'complete',
   'blocked',
@@ -179,10 +202,13 @@ export interface SessionGoalStoreOptions {
   readonly auditSink?: () => GoalAuditSink | undefined;
   /**
    * Notified with the current goal snapshot (or `null` when cleared) after each
-   * durable state change, so live UI (e.g. the footer badge) can update. Not
-   * called for per-step token / wall-clock accounting, to avoid chatty updates.
+   * durable state change, so live UI (e.g. the footer badge) can update. A
+   * `change` accompanies lifecycle / verdict / terminal transitions so the UI can
+   * also render transcript markers; it is absent for snapshot-only refreshes
+   * (e.g. a turn increment). Not called for per-step token / wall-clock
+   * accounting, to avoid chatty updates.
    */
-  readonly onGoalUpdated?: (snapshot: GoalSnapshot | null) => void;
+  readonly onGoalUpdated?: (snapshot: GoalSnapshot | null, change?: GoalChange) => void;
 }
 
 /**
@@ -345,7 +371,9 @@ export class SessionGoalStore {
     }
     const actor = input.actor ?? 'user';
     this.applyStatus(state, 'paused', actor, input.reason);
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: { kind: 'lifecycle', status: 'paused', reason: input.reason },
+    });
     this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
@@ -361,7 +389,9 @@ export class SessionGoalStore {
     }
     const actor = input.actor ?? 'user';
     this.applyStatus(state, 'active', actor, input.reason);
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: { kind: 'lifecycle', status: 'active', reason: input.reason },
+    });
     this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
@@ -373,7 +403,9 @@ export class SessionGoalStore {
     state.terminalReason = input.reason;
     const snapshot = this.toSnapshot(state);
     // Persist the cancelled transition and audit it, then clear the goal.
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: { kind: 'lifecycle', status: 'cancelled', reason: input.reason },
+    });
     this.appendStatusUpdate(state, actor, input.reason);
     await this.clearInternal(actor, input.reason);
     return snapshot;
@@ -405,7 +437,15 @@ export class SessionGoalStore {
       state.terminalEvidence = input.evidence;
       state.lastEvidence = input.evidence;
     }
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: {
+        kind: 'terminal',
+        status: input.status,
+        reason: input.reason,
+        evidence: input.evidence,
+        stats: this.statsOf(state),
+      },
+    });
     this.appendStatusUpdate(state, actor, input.reason, input.evidence);
     return this.toSnapshot(state);
   }
@@ -440,7 +480,7 @@ export class SessionGoalStore {
     const delta = Math.max(0, input.tokenDelta);
     state.tokensUsed += delta;
     state.updatedAt = new Date().toISOString();
-    await this.persistState(state, true); // per-step: don't emit a UI update
+    await this.persistState(state, { silent: true }); // per-step: no UI update
     this.appendAudit({
       type: 'goal.account_usage',
       goalId: state.goalId,
@@ -461,7 +501,7 @@ export class SessionGoalStore {
     const delta = Math.max(0, input.wallClockMs);
     state.wallClockMs += delta;
     state.updatedAt = new Date().toISOString();
-    await this.persistState(state, true); // per-step: don't emit a UI update
+    await this.persistState(state, { silent: true }); // per-step: no UI update
     this.appendAudit({
       type: 'goal.account_usage',
       goalId: state.goalId,
@@ -530,7 +570,14 @@ export class SessionGoalStore {
     // A produced verdict means the evaluator ran successfully.
     state.consecutiveFailureTurns = 0;
     state.updatedAt = new Date().toISOString();
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: {
+        kind: 'verdict',
+        verdict: input.verdict,
+        reason: input.reason,
+        evidence: input.evidence,
+      },
+    });
     this.appendAudit({
       type: 'goal.evaluate',
       goalId: state.goalId,
@@ -576,7 +623,15 @@ export class SessionGoalStore {
       state.terminalEvidence = evidence;
       state.lastEvidence = evidence;
     }
-    await this.persistState(state);
+    await this.persistState(state, {
+      change: {
+        kind: 'terminal',
+        status,
+        reason,
+        evidence,
+        stats: this.statsOf(state),
+      },
+    });
     this.appendStatusUpdate(state, 'runtime', reason, evidence);
     return this.toSnapshot(state);
   }
@@ -602,6 +657,9 @@ export class SessionGoalStore {
       actor,
       reason,
       evidence,
+      turnsUsed: state.turnsUsed,
+      tokensUsed: state.tokensUsed,
+      wallClockMs: state.wallClockMs,
     });
   }
 
@@ -639,12 +697,24 @@ export class SessionGoalStore {
    */
   private async persistState(
     state: SessionGoalState | undefined,
-    silent = false,
+    opts: { silent?: boolean; change?: GoalChange } = {},
   ): Promise<void> {
     await this.options.writeState(state);
-    if (!silent) {
-      this.options.onGoalUpdated?.(state === undefined ? null : this.toSnapshot(state));
+    if (opts.silent !== true) {
+      this.options.onGoalUpdated?.(
+        state === undefined ? null : this.toSnapshot(state),
+        opts.change,
+      );
     }
+  }
+
+  /** Counter snapshot for a {@link GoalChange}. */
+  private statsOf(state: SessionGoalState): GoalChangeStats {
+    return {
+      turnsUsed: state.turnsUsed,
+      tokensUsed: state.tokensUsed,
+      wallClockMs: state.wallClockMs,
+    };
   }
 
   private normalizeBudgetLimits(input?: GoalBudgetLimits): GoalBudgetLimits {

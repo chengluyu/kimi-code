@@ -94,6 +94,10 @@ export interface AgentRecordEvents {
     actor: GoalActor;
     reason?: string;
     evidence?: readonly GoalEvidence[];
+    /** Usage counters at the transition, so resume can rebuild the completion card. */
+    turnsUsed?: number;
+    tokensUsed?: number;
+    wallClockMs?: number;
   };
   'goal.account_usage': {
     goalId: string;

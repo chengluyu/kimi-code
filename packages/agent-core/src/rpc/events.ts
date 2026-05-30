@@ -1,6 +1,6 @@
 import type { FinishReason, TokenUsage } from '@moonshot-ai/kosong';
 
-import type { GoalSnapshot } from '../session/goal';
+import type { GoalChange, GoalSnapshot } from '../session/goal';
 import type { PromptOrigin } from '../agent/context';
 import type { KimiErrorPayload } from '../errors';
 import type { PermissionMode } from '../agent/permission';
@@ -62,6 +62,12 @@ export interface GoalUpdatedEvent {
   readonly type: 'goal.updated';
   /** Current goal snapshot, or `null` when no goal is set (cleared/cancelled). */
   readonly snapshot: GoalSnapshot | null;
+  /**
+   * What changed, when the update is a lifecycle / verdict / terminal transition.
+   * Absent for snapshot-only refreshes (e.g. a turn increment). Drives transcript
+   * markers and the completion card.
+   */
+  readonly change?: GoalChange;
 }
 
 export interface SkillActivatedEvent {

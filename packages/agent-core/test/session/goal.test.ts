@@ -11,6 +11,7 @@ import {
   DEFAULT_GOAL_FAILURE_TURN_LIMIT,
   SessionGoalStore,
   type GoalAuditSink,
+  type GoalChange,
   type GoalSnapshot,
   type SessionGoalState,
 } from '../../src/session/goal';
@@ -70,6 +71,7 @@ function makeStore() {
   let state: SessionGoalState | undefined;
   let writeCount = 0;
   const updates: (GoalSnapshot | null)[] = [];
+  const changes: (GoalChange | undefined)[] = [];
   const store = new SessionGoalStore({
     sessionId: 'test',
     readState: () => state,
@@ -77,8 +79,9 @@ function makeStore() {
       state = next;
       writeCount += 1;
     },
-    onGoalUpdated: (snapshot) => {
+    onGoalUpdated: (snapshot, change) => {
       updates.push(snapshot);
+      changes.push(change);
     },
   });
   return {
@@ -86,6 +89,7 @@ function makeStore() {
     current: () => state,
     writeCount: () => writeCount,
     updates: () => updates,
+    changes: () => changes,
   };
 }
 
@@ -159,6 +163,28 @@ describe('SessionGoalStore creation', () => {
     expect(updates().at(-1)?.status).toBe('paused');
     await store.clearGoal();
     expect(updates().at(-1)).toBeNull();
+  });
+
+  it('emits a typed change for lifecycle, verdict, and terminal transitions', async () => {
+    const { store, changes } = makeStore();
+    await store.createGoal({ objective: 'work' }); // snapshot-only (no change)
+    expect(changes().at(-1)).toBeUndefined();
+
+    await store.incrementTurn(); // snapshot-only refresh
+    expect(changes().at(-1)).toBeUndefined();
+
+    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'spinning' });
+    expect(changes().at(-1)).toMatchObject({ kind: 'verdict', verdict: 'no_progress', reason: 'spinning' });
+
+    await store.pauseGoal();
+    expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'paused' });
+    await store.resumeGoal();
+    expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'active' });
+
+    await store.updateGoal({ status: 'complete', reason: 'done', actor: 'evaluator' });
+    const terminal = changes().at(-1);
+    expect(terminal).toMatchObject({ kind: 'terminal', status: 'complete', reason: 'done' });
+    expect(terminal?.stats).toMatchObject({ turnsUsed: 1 });
   });
 
   it('rejects empty objectives', async () => {
