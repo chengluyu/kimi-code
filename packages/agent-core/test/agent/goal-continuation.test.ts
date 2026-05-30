@@ -52,8 +52,9 @@ function controllerAgent(opts: {
   type?: 'main' | 'sub';
   goals?: SessionGoalStore;
   maxStepsPerTurn?: number;
-}): { agent: Agent; messages: AppendedMessage[] } {
+}): { agent: Agent; messages: AppendedMessage[]; injectGoalCalls: () => number } {
   const messages: AppendedMessage[] = [];
+  const injection = { calls: 0 };
   const agent = {
     type: opts.type ?? 'main',
     goals: opts.goals,
@@ -61,13 +62,18 @@ function controllerAgent(opts: {
       opts.maxStepsPerTurn !== undefined
         ? { loopControl: { maxStepsPerTurn: opts.maxStepsPerTurn } }
         : undefined,
+    injection: {
+      injectGoal: async () => {
+        injection.calls += 1;
+      },
+    },
     context: {
       appendUserMessage: (content: AppendedMessage['content'], origin: AppendedMessage['origin']) => {
         messages.push({ content, origin });
       },
     },
   } as unknown as Agent;
-  return { agent, messages };
+  return { agent, messages, injectGoalCalls: () => injection.calls };
 }
 
 function stoppedCtx(stepNumber: number): LoopStoppedStepContext {
@@ -186,6 +192,32 @@ describe('GoalContinuationController decisions', () => {
       continue: true,
       resetStepBudget: true,
     });
+  });
+
+  it('re-injects goal context at each continuation boundary', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    const { agent, injectGoalCalls } = controllerAgent({ goals: store });
+    const c = new GoalContinuationController(agent, {
+      startedAt: 0,
+      createEvaluator: fixedEvaluator('continue'),
+    });
+    await c.shouldContinueAfterStop(stoppedCtx(1));
+    await c.shouldContinueAfterStop(stoppedCtx(2));
+    // One boundary injection per continuation (append-only refresh).
+    expect(injectGoalCalls()).toBe(2);
+  });
+
+  it('does not inject goal context when the evaluator ends the goal', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    const { agent, injectGoalCalls } = controllerAgent({ goals: store });
+    const c = new GoalContinuationController(agent, {
+      startedAt: 0,
+      createEvaluator: fixedEvaluator('complete'),
+    });
+    expect(await c.shouldContinueAfterStop(stoppedCtx(1))).toEqual({ continue: false });
+    expect(injectGoalCalls()).toBe(0);
   });
 
   it('treats a mid-segment step cap as a goal checkpoint, not a fatal error', async () => {

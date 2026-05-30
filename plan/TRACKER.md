@@ -71,6 +71,34 @@ coding agent, following the phase plans in this directory.
 - **Tests:** added a case asserting that a second cap hit after a budget wrap-up returns
   `{ continue: false }`. agent-core suite (2361) green; typecheck + lint OK.
 
+### Fix: goal context injected at boundaries, not per step (caching + compaction safety)
+
+- **How it surfaced:** replay analysis of session `398e1aba` showed the `GoalInjector` appended the
+  full goal reminder (~439 tokens; the objective is the entire user prompt) **before every model
+  step** — 100 copies in one turn, never evicted. Because the whole history is re-sent each step,
+  that is ~44K tokens of live duplication and ~2.2M tokens of cumulative re-send in a single turn, a
+  meaningful slice of the 13.1M-token run and a direct cause of 2 full compactions. A cross-check of
+  Codex's replay (via another agent) confirmed Codex injects the goal only at task boundaries
+  (~3×/goal), not per step — the verbatim objective is fine; the **per-step cadence** was the bug.
+- **Caching note:** an earlier "sticky single copy" idea (strip the old reminder, re-append at the
+  tail) was rejected — stripping mutates the prefix and busts prompt caching from that point at every
+  boundary. The current per-step design is already append-only/cache-friendly; its only fault is
+  cadence. So the fix keeps append-only and just lowers the cadence to boundaries.
+- **Fix (append-only, boundary cadence):**
+  - `InjectionManager` no longer runs `GoalInjector` in the per-step `inject()` loop; it holds the
+    goal injector separately and exposes `injectGoal()` (append-only; no-op off goal mode / non-main).
+  - `injectGoal()` is called at the three real boundaries: **turn start** (`turn/index.ts` before the
+    step loop), **each continuation** (`GoalContinuationController.continueToward()`), and **after
+    compaction** (`FullCompaction` post-`applyCompaction`).
+  - The post-compaction call is mandatory: `applyCompaction` collapses the prefix into a summary and
+    drops any goal reminder living there, so without re-injection the goal silently leaves context.
+  - Net: copies drop from ~100/turn to ~one per boundary (bounded by the turn budget between
+    compactions); the freshest copy sits at the tail for recency; the prefix is never mutated, so
+    prompt caching is preserved; compaction prunes stale copies.
+- **Tests:** per-step `inject()` adds no goal reminder; `injectGoal()` is append-only (N calls → N
+  records); continuation re-injects once per boundary and not when the evaluator ends the goal.
+  agent-core suite (2365) green; typecheck + lint OK.
+
 ## Detours / Notes
 
 (None yet.)

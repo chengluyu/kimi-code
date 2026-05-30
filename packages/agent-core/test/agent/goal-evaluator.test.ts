@@ -67,6 +67,9 @@ function controllerAgent(opts: { goals: SessionGoalStore }): {
     type: 'main',
     goals: opts.goals,
     kimiConfig: undefined,
+    injection: {
+      injectGoal: async () => {},
+    },
     context: {
       appendUserMessage: (_content: unknown, origin: AppendedMessage['origin']) => {
         messages.push({ origin });

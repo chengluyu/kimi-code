@@ -169,8 +169,7 @@ export class GoalContinuationController {
       if (failed !== null && failed.budget.overBudget) {
         return this.budgetLimitedWrapUp('A hard budget was reached');
       }
-      this.appendContinuationPrompt();
-      return CONTINUE;
+      return this.continueToward();
     }
 
     await store.recordEvaluatorVerdict({
@@ -219,6 +218,16 @@ export class GoalContinuationController {
     // The goal's own budgets (turn / token / wall-clock) remain the ceiling.
 
     // Continue working toward the goal.
+    return this.continueToward();
+  }
+
+  /**
+   * Continue working toward the goal at this continuation boundary: re-inject a
+   * fresh goal-context reminder (append-only, so prompt caching is preserved)
+   * and append the continuation prompt.
+   */
+  private async continueToward(): Promise<MaxStepsDecision> {
+    await this.agent.injection.injectGoal();
     this.appendContinuationPrompt();
     return CONTINUE;
   }

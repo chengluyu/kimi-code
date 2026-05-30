@@ -404,6 +404,10 @@ export class TurnFlow {
     const goalIdAtStart = this.agent.goals?.getActiveGoal()?.goalId;
     await this.agent.mcp?.waitForInitialLoad(signal);
     try {
+    // Surface the active goal at the start of the turn (append-only; no-op when
+    // goal mode is off). The goal is re-injected at each continuation boundary
+    // and after compaction rather than per step, to preserve prompt caching.
+    await this.agent.injection.injectGoal();
     while (true) {
       signal.throwIfAborted();
       const model = this.agent.config.model;

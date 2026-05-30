@@ -150,7 +150,7 @@ describe('InjectionManager goal integration', () => {
     );
   }
 
-  it('main-agent inject writes a context.append_message with origin.variant goal', async () => {
+  it('main-agent injectGoal writes a context.append_message with origin.variant goal', async () => {
     process.env[GOAL_FLAG] = 'true';
     const store = makeStore();
     await store.createGoal({ objective: 'Ship feature X' });
@@ -158,12 +158,45 @@ describe('InjectionManager goal integration', () => {
     const ctx = testAgent({ type: 'main', goals: store, persistence });
     ctx.configure();
 
-    await ctx.agent.injection.inject();
+    await ctx.agent.injection.injectGoal();
 
     const goalRecords = goalReminderRecords(persistence);
     expect(goalRecords).toHaveLength(1);
     const text = JSON.stringify(goalRecords[0]);
     expect(text).toContain('<untrusted_objective>');
+  });
+
+  it('the per-step inject() loop does NOT add a goal reminder (boundary cadence)', async () => {
+    process.env[GOAL_FLAG] = 'true';
+    const store = makeStore();
+    await store.createGoal({ objective: 'Ship feature X' });
+    const persistence = new InMemoryAgentRecordPersistence();
+    const ctx = testAgent({ type: 'main', goals: store, persistence });
+    ctx.configure();
+
+    // Many per-step injections must not accumulate goal reminders; goal context
+    // is injected only at boundaries via injectGoal().
+    await ctx.agent.injection.inject();
+    await ctx.agent.injection.inject();
+    await ctx.agent.injection.inject();
+
+    expect(goalReminderRecords(persistence)).toHaveLength(0);
+  });
+
+  it('injectGoal is append-only across boundaries (one record per call, prefix untouched)', async () => {
+    process.env[GOAL_FLAG] = 'true';
+    const store = makeStore();
+    await store.createGoal({ objective: 'Ship feature X' });
+    const persistence = new InMemoryAgentRecordPersistence();
+    const ctx = testAgent({ type: 'main', goals: store, persistence });
+    ctx.configure();
+
+    await ctx.agent.injection.injectGoal();
+    await ctx.agent.injection.injectGoal();
+
+    // Two boundaries -> two appended copies (no stripping of the earlier one),
+    // which is what keeps prompt caching intact.
+    expect(goalReminderRecords(persistence)).toHaveLength(2);
   });
 
   it('writes no goal record when there is no active goal', async () => {
@@ -173,12 +206,12 @@ describe('InjectionManager goal integration', () => {
     const ctx = testAgent({ type: 'main', goals: store, persistence });
     ctx.configure();
 
-    await ctx.agent.injection.inject();
+    await ctx.agent.injection.injectGoal();
 
     expect(goalReminderRecords(persistence)).toHaveLength(0);
   });
 
-  it('subagent inject does not add a goal reminder', async () => {
+  it('subagent injectGoal does not add a goal reminder', async () => {
     process.env[GOAL_FLAG] = 'true';
     const store = makeStore();
     await store.createGoal({ objective: 'Ship feature X' });
@@ -186,7 +219,7 @@ describe('InjectionManager goal integration', () => {
     const ctx = testAgent({ type: 'sub', goals: store, persistence });
     ctx.configure();
 
-    await ctx.agent.injection.inject();
+    await ctx.agent.injection.injectGoal();
 
     expect(goalReminderRecords(persistence)).toHaveLength(0);
   });
