@@ -99,6 +99,25 @@ coding agent, following the phase plans in this directory.
   records); continuation re-injects once per boundary and not when the evaluator ends the goal.
   agent-core suite (2365) green; typecheck + lint OK.
 
+### Fix: active completion self-audit prompt + terminal-goal note (engagement / awareness)
+
+- **Motivation:** replay showed the model never called the goal tools (0 `UpdateGoal`/`GetGoal`); it
+  tracked work with its own `TodoList` and relied on passive injection. The injected/continuation
+  text only said "*when finished*, call UpdateGoal" — no forcing function. The Codex cross-check
+  showed Codex's injected message instructs an explicit *completion audit* each task, which is why
+  its model engages. (`UpdateGoal` is terminal-only — `complete`/`blocked`/`impossible` — so this is
+  about prompting an audit, not a per-turn `active` ping.)
+- **Active self-audit:** `CONTINUATION_PROMPT` and the injected reminder's closing line now tell the
+  model to self-audit against the objective/criteria each time it resumes and to call `UpdateGoal`
+  the moment it judges the goal terminal. The independent evaluator stays the authority; the model
+  report flows in as evidence (existing `lastModelReport*` plumbing).
+- **Terminal-goal note:** `GoalInjector` previously emitted nothing for a non-active goal, so a
+  finished/`budget_limited` goal went completely silent (the replay's resumed-session symptom). It
+  now announces a terminal goal **once** (`<goalId>:<status>` dedupe) — "no longer active; start a
+  new goal or raise its budget" — then stays quiet so it never nags; paused goals remain silent.
+- **Tests:** terminal goal announces once then is silent on the next boundary. agent-core suite
+  (2365) green; typecheck + lint OK.
+
 ## Detours / Notes
 
 (None yet.)

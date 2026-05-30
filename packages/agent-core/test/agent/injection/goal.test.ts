@@ -62,11 +62,20 @@ describe('GoalInjector content', () => {
     expect(await injectOnce(store)).toBeUndefined();
   });
 
-  it('produces no injection for a terminal goal', async () => {
+  it('announces a terminal goal once, then stays silent', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
     await store.updateGoal({ status: 'complete', reason: 'done' });
-    expect(await injectOnce(store)).toBeUndefined();
+    const { agent, reminders } = injectorAgent(store);
+    const injector = new GoalInjector(agent);
+
+    await injector.inject();
+    expect(reminders.at(-1)).toContain('no longer active');
+    expect(reminders).toHaveLength(1);
+
+    // A second boundary on the same terminal goal must not re-announce.
+    await injector.inject();
+    expect(reminders).toHaveLength(1);
   });
 
   it('wraps the objective and completion criterion for an active goal', async () => {

@@ -275,10 +275,11 @@ export class GoalContinuationController {
 
 const CONTINUATION_PROMPT = [
   'Continue working toward the active goal.',
-  'Use the existing conversation context and your tools. Do not ask the user for input unless a',
-  'real blocker prevents progress.',
-  'When the goal is complete, blocked, or impossible, call UpdateGoal with a status, a short',
-  'reason, and validation evidence when available.',
+  'First, briefly self-audit: weigh the objective and any completion criteria against the work done',
+  'so far. If the goal is now complete, blocked, or impossible, call UpdateGoal with that status, a',
+  'short reason, and validation evidence when available — then stop. Otherwise keep going.',
+  'Use the existing conversation context and your tools. Do not ask the user for input unless a real',
+  'blocker prevents progress.',
 ].join(' ');
 
 function budgetWrapUpPrompt(reason: string): string {
