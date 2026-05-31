@@ -20,7 +20,6 @@ export type ParsedGoalCommand =
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'cancel' }
-  | { readonly kind: 'clear' }
   | {
       readonly kind: 'create';
       readonly objective: string;
@@ -29,13 +28,14 @@ export type ParsedGoalCommand =
     }
   | { readonly kind: 'error'; readonly message: string };
 
-const CONTROL_SUBCOMMANDS = new Set(['pause', 'resume', 'cancel', 'clear']);
+const CONTROL_SUBCOMMANDS = new Set(['pause', 'resume', 'cancel']);
 
 /**
  * Parses the deterministic `/goal` command grammar. Reserved subcommands
- * (`pause`/`resume`/`cancel`/`clear`/`status`/`replace`) are only honored as the
- * first token; use `/goal -- <objective>` to start a goal whose text begins
- * with one of those words. Budget options must precede the objective.
+ * (`pause`/`resume`/`cancel`/`status`/`replace`) are only honored as the first
+ * token; use `/goal -- <objective>` to start a goal whose text begins with one
+ * of those words. Budget options must precede the objective. (`cancel` is the
+ * single discard action — it removes the current goal.)
  */
 export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
   const args = rawArgs.trim();
@@ -44,7 +44,7 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
   const tokens = args.split(/\s+/);
   const first = tokens[0];
   if (first !== undefined && CONTROL_SUBCOMMANDS.has(first) && tokens.length === 1) {
-    return { kind: first as 'pause' | 'resume' | 'cancel' | 'clear' };
+    return { kind: first as 'pause' | 'resume' | 'cancel' };
   }
 
   let index = 0;
@@ -126,9 +126,6 @@ export async function handleGoalCommand(host: SlashCommandHost, args: string): P
     case 'cancel':
       await cancelGoal(host);
       return;
-    case 'clear':
-      await clearGoal(host);
-      return;
     case 'create':
       await createGoal(host, parsed);
       return;
@@ -186,15 +183,18 @@ async function resumeGoal(host: SlashCommandHost): Promise<void> {
 }
 
 async function cancelGoal(host: SlashCommandHost): Promise<void> {
-  await host.requireSession().cancelGoal();
+  try {
+    await host.requireSession().cancelGoal();
+  } catch (error) {
+    if (isKimiError(error) && error.code === ErrorCodes.GOAL_NOT_FOUND) {
+      host.showStatus('No goal to cancel.');
+      return;
+    }
+    host.showError(formatErrorMessage(error));
+    return;
+  }
   if (isStreaming(host)) host.cancelInFlight?.();
   host.showStatus('Goal cancelled.');
-}
-
-async function clearGoal(host: SlashCommandHost): Promise<void> {
-  await host.requireSession().clearGoal();
-  if (isStreaming(host)) host.cancelInFlight?.();
-  host.showStatus('Goal cleared.');
 }
 
 async function showGoalStatus(host: SlashCommandHost): Promise<void> {

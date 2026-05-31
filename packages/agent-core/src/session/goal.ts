@@ -59,8 +59,8 @@ export const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
  * and the human-readable `reason`. There is no separate `impossible`,
  * `budget_limited`, `error`, or `cancelled` status: an unachievable goal, an
  * exhausted budget, a runtime/evaluator failure all become `blocked(+reason)`,
- * and "cancel" is just `clearGoal` (the record is discarded). See
- * {@link SessionGoalStore} for the setters and the per-status notes below.
+ * and `cancelGoal` discards the record entirely. See {@link SessionGoalStore}
+ * for the setters and the per-status notes below.
  */
 export type GoalStatus =
   /**
@@ -198,11 +198,20 @@ export interface GoalChangeStats {
 }
 
 /**
- * Describes what changed on a `goal.updated` event, so the UI can render a
- * transcript marker (lifecycle/verdict) or a completion card (terminal). Absent
- * for snapshot-only refreshes (e.g. a turn increment that only moves the badge).
+ * Describes what changed on a `goal.updated` event, so the UI can render the
+ * right thing. Absent for snapshot-only refreshes (e.g. a turn increment that
+ * only moves the badge).
+ *
+ * - `lifecycle`: a status transition — `paused` / `active` (resumed) / `blocked`
+ *   — rendered as a low-profile transcript marker.
+ * - `verdict`: an evaluator verdict that did not change status (e.g.
+ *   `no_progress`), also rendered as a marker.
+ * - `completion`: the goal completed successfully (the only outcome that posts
+ *   the completion message and clears the record). This replaced the older
+ *   `terminal` name, which since the state consolidation only ever meant
+ *   `complete` — `blocked` is a resumable `lifecycle` change, not a completion.
  */
-export type GoalChangeKind = 'lifecycle' | 'verdict' | 'terminal';
+export type GoalChangeKind = 'lifecycle' | 'verdict' | 'completion';
 
 export interface GoalChange {
   readonly kind: GoalChangeKind;
@@ -274,8 +283,8 @@ export interface SessionGoalStoreOptions {
  *   stops pursuing — evaluator `blocked` verdict, no-progress limit, a hard budget,
  *   a `maxStepsPerTurn` cap, or a runtime/evaluator failure. `blocked` is resumable.
  * - User stop: `pauseGoal` and the interrupt path `pauseOnInterrupt` set `paused`
- *   (resumable); `clearGoal` discards the record entirely (no status — this is
- *   what `/goal cancel` and `/goal clear` both do).
+ *   (resumable); `cancelGoal` discards the record entirely (no status — this is
+ *   what `/goal cancel` does, the single remove action).
  * - An aborted turn (Esc / shutdown) is not terminal: it pauses the goal, so it
  *   stays resumable — mirroring how `normalizeMetadata` demotes an `active` goal
  *   to `paused` on session resume.
@@ -467,14 +476,13 @@ export class SessionGoalStore {
     return this.toSnapshot(state);
   }
 
-  async clearGoal(input: GoalControlInput = {}): Promise<void> {
-    await this.clearInternal(input.actor ?? 'user', input.reason);
-  }
-
   /**
-   * Discards the current goal (`/goal cancel`). There is no `cancelled` status —
-   * cancel is just a clear that returns the snapshot it removed, so callers can
-   * report what was cancelled. Throws if no goal exists.
+   * Discards the current goal — the single user-facing "remove" action
+   * (`/goal cancel`). There is no `cancelled` status: cancel clears the durable
+   * record and returns the snapshot it removed, so callers can report what was
+   * cancelled. Throws if no goal exists. (Internal callers that need to clear
+   * without a return — e.g. `createGoal` replacing an existing goal — use the
+   * private `clearInternal`.)
    */
   async cancelGoal(input: GoalControlInput = {}): Promise<GoalSnapshot> {
     const state = this.requireState();
@@ -539,7 +547,7 @@ export class SessionGoalStore {
     // persisting `complete` to disk...
     this.appendStatusUpdate(state, actor, input.reason, input.evidence);
     this.options.onGoalUpdated?.(snapshot, {
-      kind: 'terminal',
+      kind: 'completion',
       status: 'complete',
       reason: input.reason,
       evidence: input.evidence,

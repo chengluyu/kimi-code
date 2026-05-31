@@ -8,8 +8,7 @@ const GOAL_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'status', description: 'Show the current goal' },
   { value: 'pause', description: 'Pause the active goal' },
   { value: 'resume', description: 'Resume a paused goal' },
-  { value: 'cancel', description: 'Cancel the active goal' },
-  { value: 'clear', description: 'Remove the current goal' },
+  { value: 'cancel', description: 'Cancel and remove the current goal' },
   { value: 'replace', description: 'Replace the current goal with a new objective' },
   { value: '--max-turns', description: 'Stop after N continuation turns' },
   { value: '--max-tokens', description: 'Stop after N tokens' },
@@ -115,13 +114,13 @@ export const BUILTIN_SLASH_COMMANDS = [
     description: 'Start or manage an autonomous goal',
     priority: 80,
     experimentalFlag: 'goal-command',
-    argumentHint: '<objective> | status | pause | resume | cancel | clear | replace',
+    argumentHint: '<objective> | status | pause | resume | cancel | replace',
     completeArgs: goalArgumentCompletions,
-    // status / pause / cancel / clear are always available; creation, replacement,
-    // and resume start (or restart) a turn and so are idle-only.
+    // status / pause / cancel are always available; creation, replacement, and
+    // resume start (or restart) a turn and so are idle-only.
     availability: (args) => {
       const first = args.trim().split(/\s+/)[0] ?? '';
-      return first === '' || first === 'status' || first === 'pause' || first === 'cancel' || first === 'clear'
+      return first === '' || first === 'status' || first === 'pause' || first === 'cancel'
         ? 'always'
         : 'idle-only';
     },

@@ -10,7 +10,6 @@ function makeSession() {
     pauseGoal: vi.fn(async () => ({ goalId: 'g1' })),
     resumeGoal: vi.fn(async () => ({ goalId: 'g1' })),
     cancelGoal: vi.fn(async () => ({ goalId: 'g1' })),
-    clearGoal: vi.fn(async () => {}),
     clearSessionHandlers: vi.fn(),
   } as unknown as SDKRpcClient;
   const session = new Session({ id: 'ses_goal', workDir: '/tmp/work', rpc });
@@ -59,14 +58,9 @@ describe('Session goal methods', () => {
     expect(rpc.cancelGoal).toHaveBeenCalledWith({ sessionId: 'ses_goal', reason: undefined });
   });
 
-  it('clearGoal forwards sessionId', async () => {
-    const { session, rpc } = makeSession();
-    await session.clearGoal();
-    expect(rpc.clearGoal).toHaveBeenCalledWith({ sessionId: 'ses_goal', reason: undefined });
-  });
-
-  it('does not expose a public updateGoal method', () => {
+  it('does not expose a public clearGoal or updateGoal method', () => {
     const { session } = makeSession();
+    expect((session as unknown as { clearGoal?: unknown }).clearGoal).toBeUndefined();
     expect((session as unknown as { updateGoal?: unknown }).updateGoal).toBeUndefined();
   });
 });

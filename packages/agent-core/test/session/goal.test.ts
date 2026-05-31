@@ -158,14 +158,14 @@ describe('SessionGoalStore creation', () => {
     expect(updates().length).toBe(afterCreate + 1);
     expect(updates().at(-1)?.turnsUsed).toBe(1);
 
-    // Pause emits the paused snapshot; clear emits null.
+    // Pause emits the paused snapshot; cancel (discard) emits null.
     await store.pauseGoal();
     expect(updates().at(-1)?.status).toBe('paused');
-    await store.clearGoal();
+    await store.cancelGoal();
     expect(updates().at(-1)).toBeNull();
   });
 
-  it('emits a typed change for lifecycle, verdict, and terminal transitions', async () => {
+  it('emits a typed change for lifecycle, verdict, and completion transitions', async () => {
     const { store, changes } = makeStore();
     await store.createGoal({ objective: 'work' }); // snapshot-only (no change)
     expect(changes().at(-1)).toBeUndefined();
@@ -181,12 +181,12 @@ describe('SessionGoalStore creation', () => {
     await store.resumeGoal();
     expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'active' });
 
-    // markComplete emits a terminal `complete` change (with stats), then clears
-    // the durable record (a final null update), so the goal box disappears.
+    // markComplete emits a `completion` change (with stats), then clears the
+    // durable record (a final null update), so the goal box disappears.
     await store.markComplete({ reason: 'done', actor: 'evaluator' });
-    const terminal = changes().find((c) => c?.kind === 'terminal');
-    expect(terminal).toMatchObject({ kind: 'terminal', status: 'complete', reason: 'done' });
-    expect(terminal?.stats).toMatchObject({ turnsUsed: 1 });
+    const completion = changes().find((c) => c?.kind === 'completion');
+    expect(completion).toMatchObject({ kind: 'completion', status: 'complete', reason: 'done' });
+    expect(completion?.stats).toMatchObject({ turnsUsed: 1 });
     expect(store.getGoal().goal).toBeNull();
   });
 
@@ -263,12 +263,12 @@ describe('SessionGoalStore reads', () => {
     expect(store.getGoal()).toEqual({ goal: null });
   });
 
-  it('getGoal returns a blocked snapshot until resumed or cleared', async () => {
+  it('getGoal returns a blocked snapshot until resumed or cancelled', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
     await store.markBlocked({ reason: 'stuck' });
     expect(store.getGoal().goal?.status).toBe('blocked');
-    await store.clearGoal();
+    await store.cancelGoal();
     expect(store.getGoal()).toEqual({ goal: null });
   });
 
@@ -486,12 +486,12 @@ describe('SessionGoalStore lifecycle', () => {
     await expect(store.cancelGoal()).rejects.toMatchObject({ code: ErrorCodes.GOAL_NOT_FOUND });
   });
 
-  it('clearGoal is idempotent', async () => {
+  it('cancelGoal removes the goal so a second cancel throws', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
-    await store.clearGoal();
-    await expect(store.clearGoal()).resolves.toBeUndefined();
+    await store.cancelGoal();
     expect(store.getGoal()).toEqual({ goal: null });
+    await expect(store.cancelGoal()).rejects.toMatchObject({ code: ErrorCodes.GOAL_NOT_FOUND });
   });
 });
 
@@ -586,13 +586,6 @@ describe('SessionGoalStore audit records', () => {
     await store.createGoal({ objective: 'work' });
     await store.cancelGoal({ reason: 'stop' });
     expect(types()).toEqual(['goal.create', 'goal.clear']);
-  });
-
-  it('clearGoal appends goal.clear', async () => {
-    const { store, types } = makeAuditStore();
-    await store.createGoal({ objective: 'work' });
-    await store.clearGoal();
-    expect(types().at(-1)).toBe('goal.clear');
   });
 });
 

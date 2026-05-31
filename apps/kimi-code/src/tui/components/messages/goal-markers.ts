@@ -52,8 +52,9 @@ export class GoalMarkerComponent implements Component {
 
 /**
  * Builds a marker for a lifecycle / verdict change, or `null` when the change
- * should be silent (plain `continue`, model reports, terminal — terminal is a
- * completion card instead). `expanded` seeds the initial ctrl+o state.
+ * should be silent (a plain `continue` verdict, or a `completion` change —
+ * completion posts its own message, not a marker). `expanded` seeds the initial
+ * ctrl+o state.
  */
 export function buildGoalMarker(
   change: GoalChange,
@@ -89,7 +90,7 @@ function markerSpec(
         return null;
     }
   }
-  return null; // terminal (complete) -> completion card / message
+  return null; // completion -> posts its own message, not a marker
 }
 
 function wrap(text: string, width: number): string[] {

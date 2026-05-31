@@ -460,11 +460,6 @@ export class SDKRpcClient {
     return rpc.cancelGoal({ sessionId: input.sessionId, reason: input.reason });
   }
 
-  async clearGoal(input: SessionIdRpcInput & { reason?: string }): Promise<void> {
-    const rpc = await this.getRpc();
-    return rpc.clearGoal({ sessionId: input.sessionId, reason: input.reason });
-  }
-
   async listMcpServers(input: SessionIdRpcInput): Promise<readonly McpServerInfo[]> {
     const rpc = await this.getRpc();
     return rpc.listMcpServers({ sessionId: input.sessionId });

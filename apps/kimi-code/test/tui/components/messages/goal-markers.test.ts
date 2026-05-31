@@ -35,9 +35,9 @@ describe('buildGoalMarker', () => {
     expect(strip(blocked!.render(80))).toContain('Goal blocked');
   });
 
-  it('returns null for a terminal (complete) change (handled by the completion card)', () => {
+  it('returns null for a completion change (it posts its own message)', () => {
     expect(
-      buildGoalMarker({ kind: 'terminal', status: 'complete' } as GoalChange, darkColors, false),
+      buildGoalMarker({ kind: 'completion', status: 'complete' } as GoalChange, darkColors, false),
     ).toBeNull();
   });
 });

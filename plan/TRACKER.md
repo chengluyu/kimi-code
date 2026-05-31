@@ -153,6 +153,28 @@ terminal `interrupted` state (an aborted turn now pauses — see Post-implementa
   model's last assistant message; if a provider rejects consecutive assistant messages on the next
   turn this may need a role/merge tweak. Not observed in tests (the turn ends on completion).
 
+### Phase 8 follow-ups (post-review consistency pass)
+
+A design-consistency review after Phase 8 surfaced four items; the two bugs and two of the
+cleanups are now fixed.
+
+- **Resume is a fresh attempt (bug):** `resumeGoal` now resets `consecutiveNoProgressTurns` /
+  `consecutiveFailureTurns` (and clears `terminalReason`). A goal `blocked` on the no-progress or
+  evaluator-failure limit gets a full N turns again on resume, not a single strike. (`801832b`)
+- **Footer badge shows `blocked` (bug):** `formatGoalBadge` renders active / paused / blocked
+  (blocked = warning dot); only the unset/`complete` cases hide it. A resumable goal stays visible.
+  (`801832b`)
+- **`cancel` is the single discard:** dropped `/goal clear`, `clearGoal` (store / RPC / SDK), and
+  the `clear` subcommand/autocomplete. `cancelGoal` is the one user-facing remove (internal
+  `clearInternal` still backs `createGoal` replacement). `/goal clear` now parses as an objective.
+- **`GoalChange.kind` renamed `terminal` → `completion`:** since the consolidation it only ever
+  meant `complete` (`blocked` rides on `lifecycle`), so the name now matches.
+- **Not yet done (deferred from the review):** #3 — whether `paused` should inject a light note
+  every turn (point 4) or stay silent ("set it aside", point 3); currently both paused and blocked
+  inject. #5 — the active injection's over-budget guidance still tells the model to "report a
+  terminal state via UpdateGoal", but the runtime now auto-`blocks` on over-budget before the
+  evaluator runs, so that guidance is stale.
+
 ## Post-implementation fixes
 
 ### Fix: `maxStepsPerTurn` no longer fatally caps long goals (continuation checkpoint)

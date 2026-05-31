@@ -254,7 +254,7 @@ describe('goal session end-to-end', () => {
     expect(api.getGoal({}).goal).toBeNull();
 
     await api.createGoal({ objective: 'again' });
-    await api.clearGoal({});
+    await api.cancelGoal({});
     expect(api.getGoal({}).goal).toBeNull();
   });
 });

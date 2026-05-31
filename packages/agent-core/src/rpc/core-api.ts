@@ -347,7 +347,6 @@ export interface SessionAPI extends AgentAPIWithId {
   pauseGoal: (payload: GoalControlPayload) => GoalSnapshot;
   resumeGoal: (payload: GoalControlPayload) => GoalSnapshot;
   cancelGoal: (payload: GoalControlPayload) => GoalSnapshot;
-  clearGoal: (payload: GoalControlPayload) => void;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;

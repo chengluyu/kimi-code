@@ -80,7 +80,8 @@ describe('built-in slash command registry', () => {
     expect(resolveSlashCommandAvailability(goal!, 'status')).toBe('always');
     expect(resolveSlashCommandAvailability(goal!, 'pause')).toBe('always');
     expect(resolveSlashCommandAvailability(goal!, 'cancel')).toBe('always');
-    expect(resolveSlashCommandAvailability(goal!, 'clear')).toBe('always');
+    // `clear` is no longer a subcommand; it parses as an objective -> idle-only.
+    expect(resolveSlashCommandAvailability(goal!, 'clear')).toBe('idle-only');
     expect(resolveSlashCommandAvailability(goal!, 'resume')).toBe('idle-only');
     expect(resolveSlashCommandAvailability(goal!, 'Ship feature X')).toBe('idle-only');
     expect(resolveSlashCommandAvailability(goal!, 'replace Ship feature Y')).toBe('idle-only');

@@ -166,9 +166,9 @@ describe('goal command resolution', () => {
     });
   });
 
-  it('does not block status/pause/cancel/clear/bare goal while streaming', () => {
+  it('does not block status/pause/cancel/bare goal while streaming', () => {
     setExperimentalFlags({ 'goal-command': true });
-    for (const sub of ['status', 'pause', 'cancel', 'clear']) {
+    for (const sub of ['status', 'pause', 'cancel']) {
       expect(resolve(`/goal ${sub}`, { isStreaming: true })).toMatchObject({
         kind: 'builtin',
         name: 'goal',

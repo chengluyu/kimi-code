@@ -612,10 +612,6 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     return Promise.resolve(this.sessionApi(sessionId).cancelGoal(payload));
   }
 
-  clearGoal({ sessionId, ...payload }: SessionScopedPayload<GoalControlPayload>): Promise<void> {
-    return Promise.resolve(this.sessionApi(sessionId).clearGoal(payload));
-  }
-
   async installPlugin(payload: InstallPluginPayload): Promise<PluginSummary> {
     await this.pluginsReady;
     this.assertPluginsLoaded();

@@ -300,11 +300,6 @@ export class Session {
     return this.rpc.cancelGoal({ sessionId: this.id, reason: input.reason });
   }
 
-  async clearGoal(input: { reason?: string } = {}): Promise<void> {
-    this.ensureOpen();
-    return this.rpc.clearGoal({ sessionId: this.id, reason: input.reason });
-  }
-
   async listMcpServers(): Promise<readonly McpServerInfo[]> {
     this.ensureOpen();
     return this.rpc.listMcpServers({ sessionId: this.id });

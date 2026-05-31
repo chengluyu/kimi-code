@@ -129,10 +129,6 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return this.session.goals.cancelGoal({ actor: 'user', reason: payload.reason });
   }
 
-  clearGoal(payload: GoalControlPayload) {
-    return this.session.goals.clearGoal({ actor: 'user', reason: payload.reason });
-  }
-
   async prompt({ agentId, ...payload }: AgentScopedPayload<PromptPayload>) {
     if (agentId === 'main') {
       await this.updatePromptMetadata(promptMetadataTextFromPayload(payload));

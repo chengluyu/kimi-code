@@ -542,7 +542,7 @@ export class SessionEventHandler {
     // update) and a deterministic completion message lands in the transcript.
     // The same text is appended to the conversation by the continuation
     // controller, so it persists and renders identically on resume.
-    if (change.kind === 'terminal' && event.snapshot !== null) {
+    if (change.kind === 'completion' && event.snapshot !== null) {
       this.host.appendTranscriptEntry({
         id: nextTranscriptId(),
         kind: 'assistant',

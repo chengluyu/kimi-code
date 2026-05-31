@@ -48,7 +48,6 @@ function makeHost(overrides: { model?: string; hasSession?: boolean; streaming?:
     pauseGoal: vi.fn(async () => fakeSnapshot()),
     resumeGoal: vi.fn(async () => fakeSnapshot()),
     cancelGoal: vi.fn(async () => fakeSnapshot()),
-    clearGoal: vi.fn(async () => {}),
   };
   const hasSession = overrides.hasSession ?? true;
   const host = {
@@ -81,7 +80,10 @@ describe('parseGoalCommand', () => {
     expect(parseGoalCommand('pause')).toEqual({ kind: 'pause' });
     expect(parseGoalCommand('resume')).toEqual({ kind: 'resume' });
     expect(parseGoalCommand('cancel')).toEqual({ kind: 'cancel' });
-    expect(parseGoalCommand('clear')).toEqual({ kind: 'clear' });
+  });
+
+  it('treats `clear` as an objective, not a subcommand (cancel is the remove action)', () => {
+    expect(parseGoalCommand('clear')).toMatchObject({ kind: 'create', objective: 'clear' });
   });
 
   it('parses a plain objective', () => {
@@ -210,22 +212,14 @@ describe('handleGoalCommand', () => {
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
   });
 
-  it('/goal clear calls clearGoal and does not send input', async () => {
-    await handleGoalCommand(host, 'clear');
-    expect(session.clearGoal).toHaveBeenCalledOnce();
-    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
-  });
-
-  it('status/pause/cancel/clear work without a configured model', async () => {
+  it('status/pause/cancel work without a configured model', async () => {
     const { host: noModelHost, session: s } = makeHost({ model: '' });
     await handleGoalCommand(noModelHost, 'status');
     await handleGoalCommand(noModelHost, 'pause');
     await handleGoalCommand(noModelHost, 'cancel');
-    await handleGoalCommand(noModelHost, 'clear');
     expect(s.getGoal).toHaveBeenCalled();
     expect(s.pauseGoal).toHaveBeenCalled();
     expect(s.cancelGoal).toHaveBeenCalled();
-    expect(s.clearGoal).toHaveBeenCalled();
     expect(noModelHost.showError).not.toHaveBeenCalled();
   });
 
@@ -289,7 +283,6 @@ describe('goalArgumentCompletions', () => {
       'pause',
       'resume',
       'cancel',
-      'clear',
       'replace',
       '--max-turns',
       '--max-tokens',
