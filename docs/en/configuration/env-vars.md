@@ -122,7 +122,7 @@ Experimental features are gated behind `KIMI_CODE_EXPERIMENTAL_*` environment va
 
 | Environment variable | Purpose | Default |
 | --- | --- | --- |
-| `KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND` | Enable the `/goal` command and autonomous goal mode: the main agent works toward a stated objective across automatic continuations until an independent evaluator judges it complete, or it becomes blocked (an external blocker, an unachievable objective, no progress for several turns, a reached hard budget like `--max-tokens` / `--max-turns` / `--max-minutes`, or a failure). A completed goal posts a completion message and clears; a blocked goal is resumable with `/goal resume`. Registers the `CreateGoal` / `GetGoal` / `UpdateGoal` main-agent tools and injects goal guidance into the main agent's context. | `false` (off) |
+| `KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND` | Enable the `/goal` command and autonomous goal mode: the main agent works toward a stated objective across automatic continuations until an independent evaluator judges it complete, or it becomes blocked (an external blocker, an unachievable objective, no progress for several turns, or a failure). Stop conditions are expressed in the objective in natural language (e.g. "…or stop after 20 turns"), which the evaluator honors. A completed goal posts a completion message and clears; a blocked goal is resumable with `/goal resume`. Registers the `CreateGoal` / `GetGoal` main-agent tools and injects goal guidance into the main agent's context. | `false` (off) |
 | `KIMI_CODE_EXPERIMENTAL_FLAG` | Master switch: force every experimental flag on | `false` (off) |
 
 ```sh

@@ -3,19 +3,16 @@ import type { AutocompleteItem } from '@earendil-works/pi-tui';
 import { completeLeadingArg, type ArgCompletionSpec } from './complete-args';
 import type { KimiSlashCommand, SlashCommandAvailability } from './types';
 
-/** Subcommands and budget flags offered when autocompleting `/goal <…>`. */
+/** Subcommands offered when autocompleting `/goal <…>`. */
 const GOAL_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'status', description: 'Show the current goal' },
   { value: 'pause', description: 'Pause the active goal' },
   { value: 'resume', description: 'Resume a paused goal' },
   { value: 'cancel', description: 'Cancel and remove the current goal' },
   { value: 'replace', description: 'Replace the current goal with a new objective' },
-  { value: '--max-turns', description: 'Stop after N continuation turns' },
-  { value: '--max-tokens', description: 'Stop after N tokens' },
-  { value: '--max-minutes', description: 'Stop after N minutes' },
 ];
 
-/** Argument autocompletion for the `/goal` command (subcommands + budget flags). */
+/** Argument autocompletion for the `/goal` command (subcommands). */
 export function goalArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
   return completeLeadingArg(GOAL_ARG_COMPLETIONS, argumentPrefix);
 }

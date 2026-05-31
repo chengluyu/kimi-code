@@ -6,7 +6,7 @@ import type { AutocompleteItem } from '@earendil-works/pi-tui';
  * `getArgumentCompletions` from a list of these via {@link completeLeadingArg}.
  */
 export interface ArgCompletionSpec {
-  /** The token inserted on completion, e.g. `pause` or `--max-turns`. */
+  /** The token inserted on completion, e.g. `pause` or `resume`. */
   readonly value: string;
   /** Short description shown in the autocomplete menu. */
   readonly description: string;

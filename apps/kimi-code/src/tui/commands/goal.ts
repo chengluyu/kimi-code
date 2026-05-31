@@ -9,12 +9,6 @@ import type { SlashCommandHost } from './dispatch';
 const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
 const RESUME_GOAL_INPUT = 'Resume the active goal.';
 
-interface GoalBudgetLimits {
-  tokenBudget?: number;
-  turnBudget?: number;
-  wallClockBudgetMs?: number;
-}
-
 export type ParsedGoalCommand =
   | { readonly kind: 'status' }
   | { readonly kind: 'pause' }
@@ -24,7 +18,6 @@ export type ParsedGoalCommand =
       readonly kind: 'create';
       readonly objective: string;
       readonly replace: boolean;
-      readonly budgetLimits: GoalBudgetLimits;
     }
   | { readonly kind: 'error'; readonly message: string };
 
@@ -34,8 +27,9 @@ const CONTROL_SUBCOMMANDS = new Set(['pause', 'resume', 'cancel']);
  * Parses the deterministic `/goal` command grammar. Reserved subcommands
  * (`pause`/`resume`/`cancel`/`status`/`replace`) are only honored as the first
  * token; use `/goal -- <objective>` to start a goal whose text begins with one
- * of those words. Budget options must precede the objective. (`cancel` is the
- * single discard action — it removes the current goal.)
+ * of those words. (`cancel` is the single discard action — it removes the
+ * current goal.) Stop conditions are expressed in the objective in natural
+ * language (e.g. "…or stop after 20 turns"); the evaluator honors them.
  */
 export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
   const args = rawArgs.trim();
@@ -53,25 +47,10 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
     replace = true;
     index += 1;
   }
-
-  const budgetLimits: GoalBudgetLimits = {};
-  while (index < tokens.length) {
-    const token = tokens[index];
-    if (token === '--') {
-      index += 1;
-      break;
-    }
-    const option = parseBudgetOption(token);
-    if (option === undefined) break; // start of the objective
-    const rawValue = tokens[index + 1];
-    const value = parsePositiveInteger(rawValue);
-    if (value === undefined) {
-      return { kind: 'error', message: `\`${token}\` requires a positive integer value.` };
-    }
-    if (option === 'tokenBudget') budgetLimits.tokenBudget = value;
-    else if (option === 'turnBudget') budgetLimits.turnBudget = value;
-    else budgetLimits.wallClockBudgetMs = value * 60_000;
-    index += 2;
+  // `--` ends subcommand parsing so an objective can begin with a reserved word
+  // (e.g. `/goal -- pause the rollout`).
+  if (tokens[index] === '--') {
+    index += 1;
   }
 
   const objective = tokens.slice(index).join(' ').trim();
@@ -84,28 +63,7 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
       message: `Goal objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters). Reference long details by file path.`,
     };
   }
-  return { kind: 'create', objective, replace, budgetLimits };
-}
-
-function parseBudgetOption(
-  token: string | undefined,
-): 'tokenBudget' | 'turnBudget' | 'wallClockBudgetMs' | undefined {
-  switch (token) {
-    case '--max-tokens':
-      return 'tokenBudget';
-    case '--max-turns':
-      return 'turnBudget';
-    case '--max-minutes':
-      return 'wallClockBudgetMs';
-    default:
-      return undefined;
-  }
-}
-
-function parsePositiveInteger(value: string | undefined): number | undefined {
-  if (value === undefined || !/^\d+$/.test(value)) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return parsed > 0 ? parsed : undefined;
+  return { kind: 'create', objective, replace };
 }
 
 export async function handleGoalCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -145,7 +103,6 @@ async function createGoal(
     await host.requireSession().createGoal({
       objective: parsed.objective,
       replace: parsed.replace,
-      budgetLimits: parsed.budgetLimits,
     });
   } catch (error) {
     if (isKimiError(error) && error.code === ErrorCodes.GOAL_ALREADY_EXISTS) {
@@ -158,15 +115,7 @@ async function createGoal(
     return;
   }
   host.track('goal_create', { replace: parsed.replace });
-  const unbounded =
-    parsed.budgetLimits.tokenBudget === undefined &&
-    parsed.budgetLimits.turnBudget === undefined &&
-    parsed.budgetLimits.wallClockBudgetMs === undefined;
-  host.showStatus(
-    unbounded
-      ? `Goal set: ${parsed.objective}\nNo stop condition set — runs until the evaluator judges it complete. Add a clause like "…or stop after 20 turns", or pass --max-turns / --max-minutes / --max-tokens, to bound it.`
-      : `Goal set: ${parsed.objective}`,
-  );
+  host.showStatus(`Goal set: ${parsed.objective}`);
   host.sendNormalUserInput(parsed.objective);
 }
 

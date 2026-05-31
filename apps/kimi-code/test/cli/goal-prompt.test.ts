@@ -46,9 +46,9 @@ describe('parseHeadlessGoalCreate', () => {
     expect(parseHeadlessGoalCreate('/goal Ship feature X', false)).toBeUndefined();
   });
 
-  it('parses a create command with budgets', () => {
-    const result = parseHeadlessGoalCreate('/goal --max-turns 5 Ship feature X', true);
-    expect(result).toMatchObject({ objective: 'Ship feature X', budgetLimits: { turnBudget: 5 } });
+  it('parses a create command into objective + replace', () => {
+    const result = parseHeadlessGoalCreate('/goal Ship feature X', true);
+    expect(result).toEqual({ objective: 'Ship feature X', replace: false });
   });
 
   it('returns undefined for non-goal prompts and non-create subcommands', () => {

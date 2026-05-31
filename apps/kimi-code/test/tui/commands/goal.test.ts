@@ -94,23 +94,13 @@ describe('parseGoalCommand', () => {
     });
   });
 
-  it('parses budget options before the objective', () => {
+  it('keeps option-looking tokens as part of the objective (no budget flags)', () => {
+    // Budget flags were removed; stop conditions go in the objective as natural
+    // language, so a leading `--max-tokens` is just objective text.
     expect(parseGoalCommand('--max-tokens 50000 Ship feature X')).toMatchObject({
       kind: 'create',
-      objective: 'Ship feature X',
-      budgetLimits: { tokenBudget: 50000 },
+      objective: '--max-tokens 50000 Ship feature X',
     });
-    expect(parseGoalCommand('--max-turns 8 Ship X')).toMatchObject({
-      budgetLimits: { turnBudget: 8 },
-    });
-    expect(parseGoalCommand('--max-minutes 30 Ship X')).toMatchObject({
-      budgetLimits: { wallClockBudgetMs: 1_800_000 },
-    });
-  });
-
-  it('rejects non-positive-integer option values', () => {
-    expect(parseGoalCommand('--max-tokens abc Ship X')).toMatchObject({ kind: 'error' });
-    expect(parseGoalCommand('--max-turns 0 Ship X')).toMatchObject({ kind: 'error' });
   });
 
   it('treats text after -- as the objective', () => {
@@ -165,11 +155,13 @@ describe('handleGoalCommand', () => {
     expect(host.sendNormalUserInput).not.toHaveBeenCalledWith('/goal Ship feature X');
   });
 
-  it('passes budget limits through to createGoal', async () => {
-    await handleGoalCommand(host, '--max-tokens 50000 Ship feature X');
-    expect(session.createGoal).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetLimits: { tokenBudget: 50000 } }),
-    );
+  it('does not pass budget limits (flags were removed)', async () => {
+    await handleGoalCommand(host, 'Ship feature X');
+    const arg = (session.createGoal as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(arg).not.toHaveProperty('budgetLimits');
   });
 
   it('rejects too-long objectives before any SDK call', async () => {
@@ -277,26 +269,13 @@ describe('goalArgumentCompletions', () => {
     return items === null ? null : items.map((i) => i.value);
   }
 
-  it('offers every subcommand and budget flag for an empty prefix', () => {
-    expect(values('')).toEqual([
-      'status',
-      'pause',
-      'resume',
-      'cancel',
-      'replace',
-      '--max-turns',
-      '--max-tokens',
-      '--max-minutes',
-    ]);
+  it('offers every subcommand for an empty prefix', () => {
+    expect(values('')).toEqual(['status', 'pause', 'resume', 'cancel', 'replace']);
   });
 
   it('prefix-filters subcommands case-insensitively', () => {
     expect(values('pa')).toEqual(['pause']);
     expect(values('RE')).toEqual(['resume', 'replace']);
-  });
-
-  it('prefix-filters budget flags', () => {
-    expect(values('--max-t')).toEqual(['--max-turns', '--max-tokens']);
   });
 
   it('returns items whose value/label are the token itself', () => {
@@ -312,7 +291,6 @@ describe('goalArgumentCompletions', () => {
     // instead of confirming a no-op completion.
     expect(values('status')).toBeNull();
     expect(values('pause')).toBeNull();
-    expect(values('--max-turns')).toBeNull();
     // `re` still has two completions, so the menu stays open.
     expect(values('re')).toEqual(['resume', 'replace']);
   });

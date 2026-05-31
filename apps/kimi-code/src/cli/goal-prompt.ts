@@ -14,11 +14,6 @@ import { parseGoalCommand } from '#/tui/commands/index';
 export interface HeadlessGoalCreate {
   readonly objective: string;
   readonly replace: boolean;
-  readonly budgetLimits: {
-    tokenBudget?: number;
-    turnBudget?: number;
-    wallClockBudgetMs?: number;
-  };
 }
 
 /**
@@ -63,7 +58,7 @@ export function parseHeadlessGoalCreate(
   const args = trimmed.replace(/^\/goal/, '').trim();
   const parsed = parseGoalCommand(args);
   if (parsed.kind !== 'create') return undefined;
-  return { objective: parsed.objective, replace: parsed.replace, budgetLimits: parsed.budgetLimits };
+  return { objective: parsed.objective, replace: parsed.replace };
 }
 
 export interface GoalSummary {
