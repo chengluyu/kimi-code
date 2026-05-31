@@ -133,9 +133,6 @@ export interface SessionGoalState {
   tokensUsed: number;
   wallClockMs: number;
   budgetLimits: GoalBudgetLimits;
-  lastModelReportStatus?: string;
-  lastModelReportReason?: string;
-  lastModelReportEvidence?: readonly GoalEvidence[];
   lastEvaluatorVerdict?: string;
   lastEvaluatorReason?: string;
   lastEvidence?: readonly GoalEvidence[];
@@ -175,9 +172,6 @@ export interface GoalSnapshot {
   readonly tokensUsed: number;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
-  readonly lastModelReportStatus?: string;
-  readonly lastModelReportReason?: string;
-  readonly lastModelReportEvidence?: readonly GoalEvidence[];
   readonly lastEvaluatorVerdict?: string;
   readonly lastEvaluatorReason?: string;
   readonly lastEvidence?: readonly GoalEvidence[];
@@ -247,8 +241,6 @@ export interface GoalControlInput {
   readonly reason?: string;
 }
 
-export interface UpdateGoalControlInput extends GoalControlInput {}
-
 export interface SessionGoalStoreOptions {
   readonly sessionId?: string | undefined;
   /** Reads the current goal state from session metadata. */
@@ -276,9 +268,9 @@ export interface SessionGoalStoreOptions {
  *
  * Lifecycle rules (see the {@link GoalStatus} union for the full per-status map):
  * - Success: only the continuation controller calls `markComplete`, carrying the
- *   independent evaluator's `complete` verdict. The model's own `UpdateGoal` tool
- *   call is recorded as a *report* (evidence), never a direct status change — see
- *   `recordModelReport`. `markComplete` announces, then clears the record.
+ *   independent evaluator's `complete` verdict. The model has no direct say in
+ *   the goal's status — the evaluator judges completion from the conversation.
+ *   `markComplete` announces, then clears the record.
  * - System stop: `markBlocked(reason)` sets `blocked` for any reason the system
  *   stops pursuing — evaluator `blocked` verdict, no-progress limit, a hard budget,
  *   a `maxStepsPerTurn` cap, or a runtime/evaluator failure. `blocked` is resumable.
@@ -641,29 +633,6 @@ export class SessionGoalStore {
     return this.toSnapshot(state);
   }
 
-  async recordModelReport(input: {
-    requestedStatus: string;
-    reason?: string;
-    evidence?: readonly GoalEvidence[];
-  }): Promise<GoalSnapshot> {
-    const state = this.requireActiveState();
-    state.lastModelReportStatus = input.requestedStatus;
-    state.lastModelReportReason = input.reason;
-    state.lastModelReportEvidence = input.evidence;
-    state.updatedAt = new Date().toISOString();
-    // recordModelReport never changes status; it stores the model's requested
-    // terminal state as evidence for the continuation controller / evaluator.
-    await this.persistState(state);
-    this.appendAudit({
-      type: 'goal.report',
-      goalId: state.goalId,
-      requestedStatus: input.requestedStatus,
-      reason: input.reason,
-      evidence: input.evidence,
-    });
-    return this.toSnapshot(state);
-  }
-
   async recordEvaluatorVerdict(input: {
     verdict: string;
     reason?: string;
@@ -767,13 +736,6 @@ export class SessionGoalStore {
     return state;
   }
 
-  private requireActiveState(): SessionGoalState {
-    const state = this.requireState();
-    if (state.status !== 'active') {
-      throw new KimiError(ErrorCodes.GOAL_NOT_FOUND, 'No active goal');
-    }
-    return state;
-  }
 
   /**
    * Persists goal state and (unless `silent`) notifies `onGoalUpdated` with the
@@ -831,9 +793,6 @@ export class SessionGoalStore {
       tokensUsed: state.tokensUsed,
       wallClockMs: state.wallClockMs,
       budget: computeBudgetReport(state),
-      lastModelReportStatus: state.lastModelReportStatus,
-      lastModelReportReason: state.lastModelReportReason,
-      lastModelReportEvidence: state.lastModelReportEvidence,
       lastEvaluatorVerdict: state.lastEvaluatorVerdict,
       lastEvaluatorReason: state.lastEvaluatorReason,
       lastEvidence: state.lastEvidence,

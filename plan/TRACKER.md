@@ -179,6 +179,26 @@ cleanups are now fixed.
   via UpdateGoal" line, which was stale (the runtime auto-`blocks` on over-budget before the
   evaluator runs, so the model could never act on it).
 
+### Fix: removed the `UpdateGoal` tool (model self-report) entirely
+
+- **Motivation:** `UpdateGoal` never changed goal status — it called `recordModelReport`, which only
+  stored `lastModelReport*`, consumed in exactly two places (the evaluator prompt, where it was
+  explicitly labeled *"a claim to verify, not truth"*, and the active reminder). The independent
+  evaluator is the sole authority on status and judges from the conversation transcript regardless,
+  so the tool was a no-op control channel. Yet it carried real cost: it needed approval in default
+  mode (not in the default-approve list → fallback ask), rendered raw args JSON on Ctrl-O, and sat
+  permanently in the model's schema even with no goal.
+- **Decision:** delete the tool and rip out the dormant plumbing rather than leave dead surface.
+  The model now signals completion/blockage **in prose**; the evaluator reads it from the transcript
+  and decides. One decision-maker, one source of truth.
+- **Removed:** `tools/builtin/goal/update-goal.{ts,md}` + its registration/export and the `UpdateGoal`
+  entry in the default profile; `SessionGoalStore.recordModelReport` and the `lastModelReport*`
+  state/snapshot fields; the `goal.report` audit record type; `GoalEvaluatorModelReport` and the
+  evaluator's optional `modelReport` input + prompt line; the type-only `UpdateGoalControlInput`
+  stub and its re-exports. Rewrote `CONTINUATION_PROMPT` and the active reminder to ask the model to
+  state its conclusion explicitly (no tool), noting an independent evaluator decides.
+- **Note:** `CreateGoal` and `GetGoal` remain (they do real work — create/inspect the goal).
+
 ## Post-implementation fixes
 
 ### Fix: `maxStepsPerTurn` no longer fatally caps long goals (continuation checkpoint)

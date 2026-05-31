@@ -29,7 +29,6 @@ tools:
   - ExitPlanMode
   - CreateGoal
   - GetGoal
-  - UpdateGoal
   - mcp__*
 
 subagents:

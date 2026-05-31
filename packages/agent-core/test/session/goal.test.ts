@@ -369,16 +369,7 @@ describe('SessionGoalStore accounting', () => {
   });
 });
 
-describe('SessionGoalStore reports and verdicts', () => {
-  it('recordModelReport stores requested terminal state without changing status', async () => {
-    const { store } = makeStore();
-    await store.createGoal({ objective: 'work' });
-    const snap = await store.recordModelReport({ requestedStatus: 'complete', reason: 'finished' });
-    expect(snap.status).toBe('active');
-    expect(snap.lastModelReportStatus).toBe('complete');
-    expect(snap.lastModelReportReason).toBe('finished');
-  });
-
+describe('SessionGoalStore verdicts', () => {
   it('recordEvaluatorVerdict tracks no-progress streaks', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
@@ -565,13 +556,6 @@ describe('SessionGoalStore audit records', () => {
     await store.createGoal({ objective: 'work' });
     await store.incrementTurn();
     expect(types().at(-1)).toBe('goal.continuation');
-  });
-
-  it('recordModelReport appends goal.report', async () => {
-    const { store, types } = makeAuditStore();
-    await store.createGoal({ objective: 'work' });
-    await store.recordModelReport({ requestedStatus: 'complete', reason: 'done' });
-    expect(types().at(-1)).toBe('goal.report');
   });
 
   it('recordEvaluatorVerdict appends goal.evaluate', async () => {

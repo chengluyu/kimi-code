@@ -198,7 +198,6 @@ describe('AgentRecords persistence metadata', () => {
       },
       { type: 'goal.account_usage', goalId: 'g1', usageKind: 'token', delta: 5, tokensUsed: 5, wallClockMs: 0 },
       { type: 'goal.continuation', goalId: 'g1', turnsUsed: 1 },
-      { type: 'goal.report', goalId: 'g1', requestedStatus: 'complete', reason: 'done' },
       { type: 'goal.evaluate', goalId: 'g1', verdict: 'complete', reason: 'ok' },
       { type: 'goal.update', goalId: 'g1', status: 'complete', actor: 'evaluator' },
       { type: 'goal.clear', goalId: 'g1', actor: 'user' },

@@ -56,7 +56,6 @@ export type {
   SkillSummary,
   ThinkingConfig,
   ToolInfo,
-  UpdateGoalControlInput,
 } from '@moonshot-ai/agent-core';
 
 export type { KimiHostIdentity, OAuthRefreshOutcome };

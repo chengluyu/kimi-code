@@ -114,12 +114,6 @@ export interface AgentRecordEvents {
     goalId: string;
     turnsUsed: number;
   };
-  'goal.report': {
-    goalId: string;
-    requestedStatus: string;
-    reason?: string;
-    evidence?: readonly GoalEvidence[];
-  };
   'goal.evaluate': {
     goalId: string;
     verdict: string;

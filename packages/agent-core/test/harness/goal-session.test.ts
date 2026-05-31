@@ -113,7 +113,7 @@ describe('goal session end-to-end', () => {
   it('drives a goal through continuation and an evaluator-confirmed completion', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
 
     await api.createGoal({ objective: 'Ship feature X', completionCriterion: 'tests pass' });
@@ -125,17 +125,12 @@ describe('goal session end-to-end', () => {
       { ok: true, verdict: 'complete', reason: 'verified', usage: ZERO_USAGE },
     );
 
-    // Scripted main-agent flow.
+    // Scripted main-agent flow. There is no UpdateGoal tool: the model signals
+    // completion in prose, and the independent evaluator decides it's done.
     scripted.mockNextResponse({ type: 'text', text: 'planning the work' });
     scripted.mockNextResponse({ type: 'function', id: 'c1', name: 'GetGoal', arguments: '{}' });
     scripted.mockNextResponse({ type: 'text', text: 'inspected the goal' });
-    scripted.mockNextResponse({
-      type: 'function',
-      id: 'c2',
-      name: 'UpdateGoal',
-      arguments: JSON.stringify({ status: 'complete', reason: 'done' }),
-    });
-    scripted.mockNextResponse({ type: 'text', text: 'reported completion' });
+    scripted.mockNextResponse({ type: 'text', text: 'The goal is complete: tests pass.' });
 
     agent.turn.prompt([{ type: 'text', text: 'Ship feature X' }]);
     await waitForTurnEnd(events);
@@ -164,7 +159,6 @@ describe('goal session end-to-end', () => {
       'goal.create',
       'goal.account_usage',
       'goal.continuation',
-      'goal.report',
       'goal.evaluate',
       'goal.update',
       'goal.clear',
@@ -176,7 +170,7 @@ describe('goal session end-to-end', () => {
   it('blocks at a turn budget (no wrap-up segment)', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
     await api.createGoal({ objective: 'work', budgetLimits: { turnBudget: 1 } });
 
@@ -194,7 +188,7 @@ describe('goal session end-to-end', () => {
   it('preserves terminal status and demotes active goals across resume', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const { session } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
     await api.createGoal({ objective: 'resume me' });
     await session.flushMetadata();
@@ -215,7 +209,7 @@ describe('goal session end-to-end', () => {
   it('retains terminal blocked reason and evidence across resume', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const { session } = await setupSession(sessionDir, events, ['GetGoal']);
     await new SessionAPIImpl(session).createGoal({ objective: 'work' });
     await session.goals.markBlocked({
       actor: 'evaluator',
@@ -243,7 +237,7 @@ describe('goal session end-to-end', () => {
   it('supports user lifecycle controls without a model turn', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const { session } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
 
     await api.createGoal({ objective: 'work' });

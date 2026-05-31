@@ -128,16 +128,10 @@ export class GoalContinuationController {
       return this.block('A configured budget was reached');
     }
 
-    // Run the independent evaluator. The model's self-report is evidence only.
+    // Run the independent evaluator. It is the sole authority on goal status and
+    // judges completion/blockage from the conversation transcript — the model has
+    // no tool to report a terminal state, only its own prose in the transcript.
     const evaluator = this.createEvaluator(llm);
-    const modelReport =
-      goal.lastModelReportStatus !== undefined
-        ? {
-            status: goal.lastModelReportStatus,
-            reason: goal.lastModelReportReason,
-            evidence: goal.lastModelReportEvidence,
-          }
-        : undefined;
     // Surface the judge call as its own UI phase: the main model isn't streaming
     // here, so without this the TUI would show a stale generic spinner. These are
     // ephemeral signals (not wire records); the `finally` guarantees the phase
@@ -148,7 +142,6 @@ export class GoalContinuationController {
       result = await evaluator.evaluate({
         goal,
         messages: this.agent.context.messages,
-        modelReport,
         signal,
       });
     } finally {
@@ -302,9 +295,10 @@ export class GoalContinuationController {
 const CONTINUATION_PROMPT = [
   'Continue working toward the active goal.',
   'First, briefly self-audit: weigh the objective and any completion criteria against the work done',
-  'so far. If the goal is complete, call UpdateGoal with status `complete`, a short reason, and',
-  'validation evidence when available — then stop. If an external condition or required user input',
-  'prevents progress, call UpdateGoal with status `blocked` and a short reason. Otherwise keep going.',
-  'Use the existing conversation context and your tools. Do not ask the user for input unless a real',
-  'blocker prevents progress.',
+  'so far. If the goal is complete, state clearly that it is done and why, citing any validation',
+  'evidence — then stop. If an external condition or required user input prevents progress, state',
+  'clearly that you are blocked and why, then stop. Otherwise keep going. An independent evaluator',
+  'reads this conversation and decides whether the goal ends, so make your conclusion explicit in',
+  'your reply. Use the existing conversation context and your tools. Do not ask the user for input',
+  'unless a real blocker prevents progress.',
 ].join(' ');

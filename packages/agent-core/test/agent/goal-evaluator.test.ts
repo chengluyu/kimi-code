@@ -323,25 +323,11 @@ describe('GoalContinuationController with evaluator', () => {
     expect(store.getGoal().goal!.status).toBe('blocked');
   });
 
-  it('passes the model self-report to the evaluator as evidence', async () => {
+  it('is the sole authority: a continue verdict keeps the goal active', async () => {
+    // The model has no way to report a terminal state; only the evaluator's
+    // verdict drives status, so `continue` keeps the goal running.
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    await store.recordModelReport({ requestedStatus: 'complete', reason: 'i think im done' });
-    let seen: GoalEvaluatorInput['modelReport'];
-    await runWith(
-      store,
-      factoryOf((input) => {
-        seen = input.modelReport;
-        return { ok: true, verdict: 'continue', reason: 'verify more', usage: emptyUsage() };
-      }),
-    );
-    expect(seen?.status).toBe('complete');
-  });
-
-  it('does not end the goal on a model report alone when the evaluator says continue', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'work' });
-    await store.recordModelReport({ requestedStatus: 'complete', reason: 'done' });
     const { result } = await runWith(store, factoryOf(() => ({ ok: true, verdict: 'continue', reason: 'not yet', usage: emptyUsage() })));
     expect(result).toEqual({ continue: true, resetStepBudget: true });
     expect(store.getGoal().goal!.status).toBe('active');

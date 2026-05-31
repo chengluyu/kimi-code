@@ -130,13 +130,11 @@ describe('GoalInjector content', () => {
     expect(text).toContain('nearing a budget');
   });
 
-  it('includes model-report and evaluator context when present', async () => {
+  it('includes the latest evaluator verdict when present', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    await store.recordModelReport({ requestedStatus: 'complete', reason: 'looks done' });
     await store.recordEvaluatorVerdict({ verdict: 'continue', reason: 'one more check' });
     const text = (await injectOnce(store))!;
-    expect(text).toContain('Latest self-report: complete');
     expect(text).toContain('Latest evaluator verdict: continue');
   });
 });

@@ -381,9 +381,6 @@ export class ToolManager {
         flags.enabled('goal-command') &&
           this.agent.type === 'main' &&
           new b.GetGoalTool(this.agent),
-        flags.enabled('goal-command') &&
-          this.agent.type === 'main' &&
-          new b.UpdateGoalTool(this.agent),
         this.agent.rpc?.requestQuestion && new b.AskUserQuestionTool(this.agent),
         new b.TodoListTool(this.toolStore),
         new b.TaskListTool(background),

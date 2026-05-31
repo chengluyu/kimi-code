@@ -25,18 +25,10 @@ const VERDICTS: ReadonlySet<string> = new Set<GoalEvaluatorVerdict>([
   'no_progress',
 ]);
 
-export interface GoalEvaluatorModelReport {
-  readonly status: string;
-  readonly reason?: string;
-  readonly evidence?: readonly GoalEvidence[];
-}
-
 export interface GoalEvaluatorInput {
   readonly goal: GoalSnapshot;
   /** A bounded slice of the conversation to inspect. */
   readonly messages: readonly Message[];
-  /** The latest UpdateGoal self-report, when present. */
-  readonly modelReport?: GoalEvaluatorModelReport | undefined;
   readonly signal: AbortSignal;
 }
 
@@ -166,11 +158,6 @@ function buildEvaluatorPrompt(input: GoalEvaluatorInput): string {
   lines.push(`Objective: ${goal.objective}`);
   if (goal.completionCriterion !== undefined) {
     lines.push(`Completion criterion: ${goal.completionCriterion}`);
-  }
-  if (input.modelReport !== undefined) {
-    lines.push(
-      `The working model self-reported "${input.modelReport.status}"${input.modelReport.reason ? `: ${input.modelReport.reason}` : ''}. Treat this as a claim to verify, not as truth.`,
-    );
   }
   lines.push('');
   lines.push(

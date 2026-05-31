@@ -99,11 +99,6 @@ function buildGoalReminder(goal: GoalSnapshot): string {
   }
   lines.push(budgetBandGuidance(goal));
 
-  if (goal.lastModelReportStatus !== undefined) {
-    lines.push(
-      `Latest self-report: ${goal.lastModelReportStatus}${goal.lastModelReportReason ? ` — ${goal.lastModelReportReason}` : ''}.`,
-    );
-  }
   if (goal.lastEvaluatorVerdict !== undefined) {
     lines.push(
       `Latest evaluator verdict: ${goal.lastEvaluatorVerdict}${goal.lastEvaluatorReason ? ` — ${goal.lastEvaluatorReason}` : ''}.`,
@@ -113,11 +108,11 @@ function buildGoalReminder(goal: GoalSnapshot): string {
   lines.push('');
   lines.push(
     'Each time you resume, first self-audit against the objective and any completion criteria above ' +
-      'before doing more work. When the goal is finished, call UpdateGoal with a status and reason: ' +
-      '`complete` only when no required work remains and any stated validation has passed; `blocked` ' +
-      'when an external condition or required user input prevents progress, or the objective cannot ' +
-      'be completed as stated. Include validation evidence when available. The runtime evaluator ' +
-      'decides whether your report ends the goal.',
+      'before doing more work. When the goal is finished, state clearly in your reply that it is ' +
+      '`complete` (only when no required work remains and any stated validation has passed) or ' +
+      '`blocked` (when an external condition or required user input prevents progress, or the ' +
+      'objective cannot be completed as stated), and say why, citing validation evidence when ' +
+      'available. An independent evaluator reads this conversation and decides whether the goal ends.',
   );
   return lines.join('\n');
 }

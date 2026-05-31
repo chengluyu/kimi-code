@@ -17,7 +17,6 @@ import type {
   GoalSnapshot,
   GoalStatus,
   GoalToolResult,
-  UpdateGoalControlInput,
 } from '#/session/goal';
 import type { BackgroundTaskInfo } from '#/tools/builtin';
 import type { ContentPart } from '@moonshot-ai/kosong';
@@ -264,8 +263,8 @@ export interface UpdateSessionMetadataPayload {
 }
 
 // Goal lifecycle payloads and re-exported goal value types. These describe the
-// deterministic user/SDK control surface; model-driven terminal updates go
-// through the `UpdateGoal` tool, not this API.
+// deterministic user/SDK control surface; the goal's terminal status is decided
+// by the independent evaluator, not reported by the model or set through this API.
 export type {
   CreateGoalInput,
   GoalBudgetLimits,
@@ -276,7 +275,6 @@ export type {
   GoalSnapshot,
   GoalStatus,
   GoalToolResult,
-  UpdateGoalControlInput,
 };
 
 export interface CreateGoalPayload {
