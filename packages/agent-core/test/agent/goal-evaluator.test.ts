@@ -56,6 +56,7 @@ function throwingLLM(): LLM {
 
 interface AppendedMessage {
   readonly origin: { kind: string; name?: string };
+  readonly content?: ReadonlyArray<{ text?: string }>;
 }
 
 function controllerAgent(opts: { goals: SessionGoalStore }): {
@@ -73,6 +74,9 @@ function controllerAgent(opts: { goals: SessionGoalStore }): {
     context: {
       appendUserMessage: (_content: unknown, origin: AppendedMessage['origin']) => {
         messages.push({ origin });
+      },
+      appendMessage: (message: { origin: AppendedMessage['origin']; content: AppendedMessage['content'] }) => {
+        messages.push({ origin: message.origin, content: message.content });
       },
       get messages() {
         return [];
@@ -203,10 +207,16 @@ describe('GoalContinuationController with evaluator', () => {
   it('completes and clears the goal on a complete verdict', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    const { result } = await runWith(store, factoryOf(() => ({ ok: true, verdict: 'complete', reason: 'done', usage: emptyUsage() })));
+    const { result, messages } = await runWith(store, factoryOf(() => ({ ok: true, verdict: 'complete', reason: 'done', usage: emptyUsage() })));
     expect(result).toEqual({ continue: false });
     // `complete` is transient — the goal box disappears.
     expect(store.getGoal().goal).toBeNull();
+    // A deterministic completion message is appended to the conversation.
+    const last = messages.at(-1);
+    expect(last?.origin).toEqual({ kind: 'system_trigger', name: 'goal_completion' });
+    const text = (last?.content ?? []).map((p) => p.text ?? '').join('');
+    expect(text).toContain('Goal complete');
+    expect(text).toContain('done');
   });
 
   it('marks blocked (resumable) and stops on a blocked verdict', async () => {

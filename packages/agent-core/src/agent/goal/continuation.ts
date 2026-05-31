@@ -9,11 +9,13 @@ import type {
   MaxStepsDecision,
   ShouldContinueAfterStopResult,
 } from '../../loop/types';
+import { buildGoalCompletionMessage } from './completion';
 import {
   GoalEvaluator,
   type GoalEvaluatorInput,
   type GoalEvaluatorResult,
 } from './evaluator';
+import type { GoalSnapshot } from '../../session/goal';
 
 /** Minimal evaluator surface so tests can inject a fake judge. */
 export interface GoalEvaluatorLike {
@@ -177,13 +179,16 @@ export class GoalContinuationController {
       evidence: result.evidence,
     });
 
-    // Success: complete + clear (the store announces; the box disappears).
+    // Success: complete + clear (the box disappears), then append a
+    // deterministic completion message to the conversation. markComplete returns
+    // the final snapshot (status `complete`, reason + stats) before clearing.
     if (result.verdict === 'complete') {
-      await store.markComplete({
+      const completed = await store.markComplete({
         actor: 'evaluator',
         reason: result.reason,
         evidence: result.evidence,
       });
+      if (completed !== null) this.appendCompletionMessage(completed);
       return STOP;
     }
 
@@ -267,6 +272,20 @@ export class GoalContinuationController {
       [{ type: 'text', text: CONTINUATION_PROMPT }],
       { kind: 'system_trigger', name: 'goal_continuation' },
     );
+  }
+
+  /**
+   * Appends the deterministic completion message as an assistant message, so it
+   * is part of the conversation (persisted, rendered on resume). The TUI renders
+   * the same text live off the `goal.updated` terminal event.
+   */
+  private appendCompletionMessage(goal: GoalSnapshot): void {
+    this.agent.context.appendMessage({
+      role: 'assistant',
+      content: [{ type: 'text', text: buildGoalCompletionMessage(goal) }],
+      toolCalls: [],
+      origin: { kind: 'system_trigger', name: 'goal_completion' },
+    });
   }
 }
 

@@ -70,6 +70,9 @@ function controllerAgent(opts: {
       appendUserMessage: (content: AppendedMessage['content'], origin: AppendedMessage['origin']) => {
         messages.push({ content, origin });
       },
+      appendMessage: (message: { content: AppendedMessage['content']; origin: AppendedMessage['origin'] }) => {
+        messages.push({ content: message.content, origin: message.origin });
+      },
     },
   } as unknown as Agent;
   return { agent, messages, injectGoalCalls: () => injection.calls };

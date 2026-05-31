@@ -61,6 +61,7 @@ import type { ToolServices } from '../tools/support/services';
 
 export type { AgentRecord, AgentRecordPersistence } from './records';
 export type { BuiltinTool, ToolInfo, ToolSource, UserToolRegistration } from './tool';
+export { buildGoalCompletionMessage } from './goal/completion';
 
 export type AgentType = 'main' | 'sub' | 'independent';
 
