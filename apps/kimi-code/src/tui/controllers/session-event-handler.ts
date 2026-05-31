@@ -34,6 +34,7 @@ import type {
 import { buildGoalCompletionMessage } from '@moonshot-ai/kimi-code-sdk';
 
 import { MoonLoader } from '../components/chrome/moon-loader';
+import { pickGoalEvalLabel } from '../constant/goal-eval-labels';
 import { buildGoalMarker } from '../components/messages/goal-markers';
 import { StatusMessageComponent } from '../components/messages/status-message';
 import {
@@ -196,7 +197,9 @@ export class SessionEventHandler {
       case 'agent.status.updated': this.handleStatusUpdate(event); break;
       case 'session.meta.updated': this.handleSessionMetaChanged(event); break;
       case 'goal.updated': this.handleGoalUpdated(event); break;
-      case 'goal.evaluation.started': this.host.setAppState({ goalEvaluating: true }); break;
+      case 'goal.evaluation.started':
+        this.host.setAppState({ goalEvaluating: true, goalEvalLabel: pickGoalEvalLabel() });
+        break;
       case 'goal.evaluation.ended': this.host.setAppState({ goalEvaluating: false }); break;
       case 'skill.activated': this.handleSkillActivated(event); break;
       case 'error': this.handleSessionError(event); break;

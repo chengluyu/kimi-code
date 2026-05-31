@@ -1411,7 +1411,8 @@ export class KimiTUI {
         break;
       }
       case 'goal-eval': {
-        const spinner = this.ensureActivitySpinner('braille', 'Evaluating the goal…', (s) =>
+        const label = this.state.appState.goalEvalLabel ?? 'Reviewing progress…';
+        const spinner = this.ensureActivitySpinner('braille', label, (s) =>
           chalk.hex(this.state.theme.colors.primary)(s),
         );
         this.state.activityContainer.addChild(
