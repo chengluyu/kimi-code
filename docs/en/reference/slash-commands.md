@@ -73,6 +73,10 @@ Kimi Code saves the objective, sends it as the next user message, and keeps runn
 
 Write stop conditions in the objective itself. `/goal` does not have separate flags for stop limits.
 
+In the TUI, starting or replacing a goal in `manual` permission mode opens a confirmation prompt first. You can switch to `auto`, switch to `yolo`, or start in `manual`. You can also return to the input box with your `/goal` command still there.
+
+`manual` mode is not suitable for unattended goal work. Kimi Code may stop and wait for your approval.
+
 Use these forms to manage the current goal:
 
 | Command | What it does | Availability |

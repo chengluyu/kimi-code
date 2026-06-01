@@ -1583,6 +1583,13 @@ export class KimiTUI {
     this.state.ui.requestRender();
   }
 
+  restoreInputText(text: string): void {
+    this.restoreEditor();
+    this.state.editor.setText(text);
+    this.updateEditorBorderHighlight(text);
+    this.state.ui.requestRender();
+  }
+
   private async runMigrationScreen(plan: MigrationPlan): Promise<MigrationScreenResult> {
     const result = await new Promise<MigrationScreenResult>((resolve) => {
       const screen = new MigrationScreenComponent({

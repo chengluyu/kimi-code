@@ -100,6 +100,7 @@ export interface SlashCommandHost {
   track(event: string, props?: Record<string, unknown>): void;
   mountEditorReplacement(panel: Component & Focusable): void;
   restoreEditor(): void;
+  restoreInputText(text: string): void;
 
   // Session
   requireSession(): Session;

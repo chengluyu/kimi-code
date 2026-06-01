@@ -1,5 +1,9 @@
-import { ErrorCodes, isKimiError } from '@moonshot-ai/kimi-code-sdk';
+import { ErrorCodes, isKimiError, type PermissionMode } from '@moonshot-ai/kimi-code-sdk';
 
+import {
+  GoalStartPermissionPromptComponent,
+  type GoalStartPermissionChoice,
+} from '../components/dialogs/goal-start-permission-prompt';
 import { buildGoalReportLines, GoalSetMessageComponent, goalPanelTitle } from '../components/messages/goal-panel';
 import { UsagePanelComponent } from '../components/messages/usage-panel';
 import { LLM_NOT_SET_MESSAGE } from '../constant/kimi-tui';
@@ -92,7 +96,7 @@ export async function handleGoalCommand(host: SlashCommandHost, args: string): P
       await cancelGoal(host);
       return;
     case 'create':
-      await createGoal(host, parsed);
+      await createGoal(host, parsed, args);
       return;
   }
 }
@@ -100,12 +104,74 @@ export async function handleGoalCommand(host: SlashCommandHost, args: string): P
 async function createGoal(
   host: SlashCommandHost,
   parsed: Extract<ParsedGoalCommand, { kind: 'create' }>,
+  rawArgs?: string,
 ): Promise<void> {
   // A goal must be able to start a model turn; refuse to create one otherwise.
   if (host.state.appState.model.trim().length === 0 || host.session === undefined) {
     host.showError(LLM_NOT_SET_MESSAGE);
     return;
   }
+
+  if (host.state.appState.permissionMode === 'manual') {
+    showGoalStartPermissionPrompt(host, parsed, rawArgs ?? parsed.objective);
+    return;
+  }
+
+  await startGoal(host, parsed);
+}
+
+function showGoalStartPermissionPrompt(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedGoalCommand, { kind: 'create' }>,
+  rawArgs: string,
+): void {
+  const commandText = `/goal ${rawArgs.trim()}`;
+  const cancelStart = (): void => {
+    host.restoreInputText(commandText);
+    host.showStatus('Goal not started.');
+  };
+  host.mountEditorReplacement(
+    new GoalStartPermissionPromptComponent({
+      colors: host.state.theme.colors,
+      onSelect: (choice) => {
+        if (choice === 'cancel') {
+          cancelStart();
+          return;
+        }
+        host.restoreEditor();
+        void startGoalWithPermission(host, parsed, choice);
+      },
+      onCancel: cancelStart,
+    }),
+  );
+}
+
+async function startGoalWithPermission(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedGoalCommand, { kind: 'create' }>,
+  choice: GoalStartPermissionChoice,
+): Promise<void> {
+  if (choice === 'auto' || choice === 'yolo') {
+    if (!(await setPermissionForGoal(host, choice))) return;
+  }
+  await startGoal(host, parsed);
+}
+
+async function setPermissionForGoal(host: SlashCommandHost, mode: PermissionMode): Promise<boolean> {
+  try {
+    await host.requireSession().setPermission(mode);
+  } catch (error) {
+    host.showError(`Failed to set permission mode: ${formatErrorMessage(error)}`);
+    return false;
+  }
+  host.setAppState({ permissionMode: mode });
+  return true;
+}
+
+async function startGoal(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedGoalCommand, { kind: 'create' }>,
+): Promise<void> {
   try {
     await host.requireSession().createGoal({
       objective: parsed.objective,

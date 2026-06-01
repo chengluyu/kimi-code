@@ -9,6 +9,11 @@ import {
   setExperimentalFlags,
 } from '#/tui/commands/index';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
+import { getColorPalette } from '#/tui/theme/colors';
+
+const ENTER = '\r';
+const ESCAPE = '\u001B';
+const DOWN = '\u001B[B';
 
 function fakeSnapshot() {
   return {
@@ -41,8 +46,20 @@ function fakeSnapshot() {
   };
 }
 
-function makeHost(overrides: { model?: string; hasSession?: boolean; streaming?: boolean } = {}) {
+function stripAnsi(text: string): string {
+  return text.replaceAll(/\u001B\[[0-9;]*m/g, '');
+}
+
+function makeHost(
+  overrides: {
+    model?: string;
+    hasSession?: boolean;
+    streaming?: boolean;
+    permissionMode?: 'manual' | 'auto' | 'yolo';
+  } = {},
+) {
   const session = {
+    setPermission: vi.fn(async () => {}),
     createGoal: vi.fn(async () => fakeSnapshot()),
     getGoal: vi.fn(async () => ({ goal: null })),
     pauseGoal: vi.fn(async () => fakeSnapshot()),
@@ -55,23 +72,39 @@ function makeHost(overrides: { model?: string; hasSession?: boolean; streaming?:
     state: {
       appState: {
         model: overrides.model ?? 'kimi-model',
+        permissionMode: overrides.permissionMode ?? 'auto',
         streamingPhase: overrides.streaming ? 'streaming' : 'idle',
         isCompacting: false,
       },
       transcriptContainer,
       ui: { requestRender: vi.fn() },
-      theme: { colors: {} },
+      theme: { colors: getColorPalette('dark') },
     },
     session: hasSession ? session : undefined,
     skillCommandMap: new Map<string, string>(),
     requireSession: () => session,
+    setAppState: vi.fn((patch: Record<string, unknown>) => Object.assign(host.state.appState, patch)),
     showError: vi.fn(),
     showStatus: vi.fn(),
+    showNotice: vi.fn(),
+    mountEditorReplacement: vi.fn(),
+    restoreEditor: vi.fn(),
+    restoreInputText: vi.fn(),
     sendNormalUserInput: vi.fn(),
     cancelInFlight: vi.fn(),
     track: vi.fn(),
   } as unknown as SlashCommandHost;
   return { host, session };
+}
+
+interface TestPicker {
+  handleInput(data: string): void;
+  render(width: number): string[];
+}
+
+function mountedPicker(host: SlashCommandHost): TestPicker {
+  const mock = host.mountEditorReplacement as ReturnType<typeof vi.fn>;
+  return mock.mock.calls[0]?.[0] as TestPicker;
 }
 
 describe('parseGoalCommand', () => {
@@ -157,6 +190,95 @@ describe('handleGoalCommand', () => {
     );
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
     expect(host.sendNormalUserInput).not.toHaveBeenCalledWith('/goal Ship feature X');
+  });
+
+  it('asks before starting a goal in Manual mode', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'Ship feature X');
+
+    expect(manualHost.mountEditorReplacement).toHaveBeenCalledOnce();
+    expect(s.createGoal).not.toHaveBeenCalled();
+    expect(manualHost.sendNormalUserInput).not.toHaveBeenCalled();
+    const text = stripAnsi(mountedPicker(manualHost).render(80).join('\n'));
+    expect(text).toContain('Manual mode is not suitable for unattended goal work');
+    expect(text).toContain('Return to the input box with your goal command');
+  });
+
+  it('defaults to Auto when confirming a Manual-mode goal start', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'Ship feature X');
+    mountedPicker(manualHost).handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(s.createGoal).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: 'Ship feature X' }),
+      );
+    });
+    expect(s.setPermission).toHaveBeenCalledWith('auto');
+    expect(manualHost.setAppState).toHaveBeenCalledWith({ permissionMode: 'auto' });
+    expect(manualHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
+  });
+
+  it('can start a Manual-mode goal without changing permission', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'Ship feature X');
+    const picker = mountedPicker(manualHost);
+    picker.handleInput(DOWN);
+    picker.handleInput(DOWN);
+    picker.handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(s.createGoal).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: 'Ship feature X' }),
+      );
+    });
+    expect(s.setPermission).not.toHaveBeenCalled();
+    expect(manualHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
+  });
+
+  it('can switch to YOLO when starting a Manual-mode goal', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'Ship feature X');
+    const picker = mountedPicker(manualHost);
+    picker.handleInput(DOWN);
+    picker.handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(s.createGoal).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: 'Ship feature X' }),
+      );
+    });
+    expect(s.setPermission).toHaveBeenCalledWith('yolo');
+    expect(manualHost.setAppState).toHaveBeenCalledWith({ permissionMode: 'yolo' });
+  });
+
+  it('returns the command to the input box when a Manual-mode goal start is cancelled', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'Ship feature X');
+    mountedPicker(manualHost).handleInput(ESCAPE);
+
+    expect(manualHost.restoreInputText).toHaveBeenCalledWith('/goal Ship feature X');
+    expect(manualHost.showStatus).toHaveBeenCalledWith('Goal not started.');
+    expect(s.createGoal).not.toHaveBeenCalled();
+  });
+
+  it('returns the command to the input box when Do not start is selected', async () => {
+    const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
+
+    await handleGoalCommand(manualHost, 'replace Ship feature Y');
+    const picker = mountedPicker(manualHost);
+    picker.handleInput(DOWN);
+    picker.handleInput(DOWN);
+    picker.handleInput(DOWN);
+    picker.handleInput(ENTER);
+
+    expect(manualHost.restoreInputText).toHaveBeenCalledWith('/goal replace Ship feature Y');
+    expect(s.createGoal).not.toHaveBeenCalled();
   });
 
   it('does not pass budget limits (flags were removed)', async () => {
