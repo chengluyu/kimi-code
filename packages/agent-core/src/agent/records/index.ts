@@ -97,7 +97,6 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'goal.update':
     case 'goal.account_usage':
     case 'goal.continuation':
-    case 'goal.evaluate':
     case 'goal.clear':
       return;
   }

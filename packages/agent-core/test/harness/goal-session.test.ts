@@ -13,22 +13,6 @@ import { SessionAPIImpl } from '../../src/session/rpc';
 import { createScriptedGenerate } from '../agent/harness/scripted-generate';
 import { testKaos } from '../fixtures/test-kaos';
 
-// Drive the goal evaluator deterministically without a model call.
-const { evalQueue } = vi.hoisted(() => ({
-  evalQueue: [] as Array<{ ok: boolean; verdict?: string; reason?: string; error?: string; usage: unknown }>,
-}));
-const ZERO_USAGE = { inputOther: 0, output: 0, inputCacheRead: 0, inputCacheCreation: 0 };
-
-vi.mock('../../src/agent/goal/evaluator', () => ({
-  GoalEvaluator: class {
-    async evaluate() {
-      return (
-        evalQueue.shift() ?? { ok: true, verdict: 'continue', reason: 'default', usage: ZERO_USAGE }
-      );
-    }
-  },
-}));
-
 const GOAL_FLAG = 'KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND';
 const MOCK_PROVIDER = { type: 'kimi', apiKey: 'test-key', model: 'mock-model' } as const satisfies ProviderConfig;
 
@@ -42,7 +26,6 @@ function track(session: Session): Session {
 
 beforeEach(() => {
   process.env[GOAL_FLAG] = 'true';
-  evalQueue.length = 0;
 });
 
 afterEach(async () => {
@@ -103,40 +86,37 @@ async function setupSession(sessionDir: string, events: Array<Record<string, unk
   return { session, agent, scripted };
 }
 
-function waitForTurnEnd(events: Array<Record<string, unknown>>): Promise<void> {
-  return vi.waitFor(() => {
-    expect(events.some((e) => e['type'] === 'turn.ended')).toBe(true);
-  }, { timeout: 10000, interval: 10 });
-}
-
 describe('goal session end-to-end', () => {
-  it('drives a goal through continuation and an evaluator-confirmed completion', async () => {
+  it('drives a goal across sequential turns until the model marks it complete', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal']);
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
     const api = new SessionAPIImpl(session);
 
     await api.createGoal({ objective: 'Ship feature X', completionCriterion: 'tests pass' });
 
-    // Evaluator: continue after step 1 and step 3, then confirm complete after the report step.
-    evalQueue.push(
-      { ok: true, verdict: 'continue', reason: 'starting', usage: ZERO_USAGE },
-      { ok: true, verdict: 'continue', reason: 'inspecting', usage: ZERO_USAGE },
-      { ok: true, verdict: 'complete', reason: 'verified', usage: ZERO_USAGE },
-    );
-
-    // Scripted main-agent flow. There is no UpdateGoal tool: the model signals
-    // completion in prose, and the independent evaluator decides it's done.
-    scripted.mockNextResponse({ type: 'text', text: 'planning the work' });
-    scripted.mockNextResponse({ type: 'function', id: 'c1', name: 'GetGoal', arguments: '{}' });
-    scripted.mockNextResponse({ type: 'text', text: 'inspected the goal' });
-    scripted.mockNextResponse({ type: 'text', text: 'The goal is complete: tests pass.' });
+    // Turn 1 stops without deciding -> the driver runs a second turn. In turn 2
+    // the model calls UpdateGoal('complete'), which clears the goal and ends the
+    // drive. No evaluator: the model's own tool call is the decision.
+    scripted.mockNextResponse({ type: 'text', text: 'Working on the objective.' });
+    scripted.mockNextResponse({
+      type: 'function',
+      id: 'c1',
+      name: 'UpdateGoal',
+      arguments: JSON.stringify({ status: 'complete' }),
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'The goal is complete.' });
 
     agent.turn.prompt([{ type: 'text', text: 'Ship feature X' }]);
-    await waitForTurnEnd(events);
+    // Wait for the whole goal drive (many turns), not just the first turn.ended.
+    await agent.turn.waitForCurrentTurn();
     await session.flushMetadata();
 
-    // Goal injection reached the model.
+    // The goal ran as more than one turn (start/end per continuation).
+    const turnStarts = events.filter((e) => e['type'] === 'turn.started').length;
+    expect(turnStarts).toBeGreaterThanOrEqual(2);
+
+    // Goal injection reached the model on the first turn.
     const firstHistory = JSON.stringify(scripted.calls[0]?.history ?? []);
     expect(firstHistory).toContain('<untrusted_objective>');
 
@@ -147,7 +127,7 @@ describe('goal session end-to-end', () => {
     expect(parsed.custom.goal).toBeUndefined();
     expect(api.getGoal({}).goal).toBeNull();
 
-    // Audit trail in the main agent wire records the whole run incl. completion.
+    // Audit trail records the whole run incl. completion — and no evaluator record.
     const wire = await readFile(join(sessionDir, 'agents', 'main', 'wire.jsonl'), 'utf-8');
     const types = new Set(
       wire
@@ -155,16 +135,10 @@ describe('goal session end-to-end', () => {
         .filter((l) => l.trim().length > 0)
         .map((l) => (JSON.parse(l) as { type: string }).type),
     );
-    for (const t of [
-      'goal.create',
-      'goal.account_usage',
-      'goal.continuation',
-      'goal.evaluate',
-      'goal.update',
-      'goal.clear',
-    ]) {
+    for (const t of ['goal.create', 'goal.account_usage', 'goal.continuation', 'goal.update', 'goal.clear']) {
       expect(types.has(t)).toBe(true);
     }
+    expect(types.has('goal.evaluate')).toBe(false);
   });
 
   it('blocks at a turn budget (no wrap-up segment)', async () => {
@@ -177,10 +151,10 @@ describe('goal session end-to-end', () => {
     scripted.mockNextResponse({ type: 'text', text: 'step 1' });
 
     agent.turn.prompt([{ type: 'text', text: 'work' }]);
-    await waitForTurnEnd(events);
+    await agent.turn.waitForCurrentTurn();
     await session.flushMetadata();
 
-    // One step, then the turn budget blocks the goal (resumable) — no wrap-up.
+    // One turn, then the turn budget blocks the goal (resumable) — no second turn.
     expect(api.getGoal({}).goal?.status).toBe('blocked');
     expect(scripted.calls.length).toBe(1);
   });

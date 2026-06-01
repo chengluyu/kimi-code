@@ -50,6 +50,7 @@ function makeHost(overrides: { model?: string; hasSession?: boolean; streaming?:
     cancelGoal: vi.fn(async () => fakeSnapshot()),
   };
   const hasSession = overrides.hasSession ?? true;
+  const transcriptContainer = { addChild: vi.fn() };
   const host = {
     state: {
       appState: {
@@ -57,6 +58,9 @@ function makeHost(overrides: { model?: string; hasSession?: boolean; streaming?:
         streamingPhase: overrides.streaming ? 'streaming' : 'idle',
         isCompacting: false,
       },
+      transcriptContainer,
+      ui: { requestRender: vi.fn() },
+      theme: { colors: {} },
     },
     session: hasSession ? session : undefined,
     skillCommandMap: new Map<string, string>(),

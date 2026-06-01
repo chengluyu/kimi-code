@@ -56,11 +56,6 @@ export async function runTurn(input: RunTurnInput): Promise<TurnResult> {
   } = input;
   let usage: TokenUsage = emptyUsage();
   let steps = 0;
-  // Steps consumed before the current segment. `maxSteps` bounds `steps -
-  // stepBudgetBase`, so a continuation that resets the budget gets a fresh cap
-  // while `steps` stays monotonic for step numbering. Non-goal turns never move
-  // this, so the cap behaves exactly as before.
-  let stepBudgetBase = 0;
   // Normal exits overwrite this with the completed step's stop reason.
   let stopReason: LoopTurnStopReason = 'end_turn';
   let activeStep: number | undefined;
@@ -72,23 +67,8 @@ export async function runTurn(input: RunTurnInput): Promise<TurnResult> {
     while (true) {
       signal.throwIfAborted();
 
-      if (maxSteps !== undefined && maxSteps > 0 && steps - stepBudgetBase >= maxSteps) {
-        // Let a hook (goal mode) treat the cap as a checkpoint. No hook, or an
-        // undefined result, preserves the original fatal behavior.
-        const decision = await hooks?.shouldContinueOnMaxSteps?.({
-          turnId,
-          stepNumber: steps,
-          signal,
-          llm,
-          maxSteps,
-        });
-        if (decision === undefined) {
-          throw createMaxStepsExceededError(maxSteps);
-        }
-        if (!decision.continue) {
-          break; // Goal decided to stop (terminal/budget); end the turn cleanly.
-        }
-        stepBudgetBase = steps; // Start a fresh segment budget and keep going.
+      if (maxSteps !== undefined && maxSteps > 0 && steps >= maxSteps) {
+        throw createMaxStepsExceededError(maxSteps);
       }
 
       steps += 1;
@@ -125,11 +105,6 @@ export async function runTurn(input: RunTurnInput): Promise<TurnResult> {
       });
       if (continuation?.continue !== true) {
         break;
-      }
-      if (continuation.resetStepBudget === true) {
-        // Goal continuation: bound `maxStepsPerTurn` to this segment, not the
-        // whole goal run.
-        stepBudgetBase = steps;
       }
     }
   } catch (error) {

@@ -131,10 +131,16 @@ export interface SessionGoalState {
   consecutiveNoProgressTurns: number;
   consecutiveFailureTurns: number;
   tokensUsed: number;
+  /** Accumulated active-pursuit time from completed `active` intervals. */
   wallClockMs: number;
+  /**
+   * Epoch ms anchoring the current `active` interval (undefined when not active).
+   * The live elapsed since this is added to `wallClockMs` when reporting, so the
+   * timer is correct even when read mid-turn; the interval is folded into
+   * `wallClockMs` when the goal leaves `active`. Reset on session resume.
+   */
+  wallClockResumedAt?: number;
   budgetLimits: GoalBudgetLimits;
-  lastEvaluatorVerdict?: string;
-  lastEvaluatorReason?: string;
   lastEvidence?: readonly GoalEvidence[];
   terminalReason?: string;
   terminalEvidence?: readonly GoalEvidence[];
@@ -172,8 +178,6 @@ export interface GoalSnapshot {
   readonly tokensUsed: number;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
-  readonly lastEvaluatorVerdict?: string;
-  readonly lastEvaluatorReason?: string;
   readonly lastEvidence?: readonly GoalEvidence[];
   readonly terminalReason?: string;
   readonly terminalEvidence?: readonly GoalEvidence[];
@@ -198,19 +202,16 @@ export interface GoalChangeStats {
  *
  * - `lifecycle`: a status transition — `paused` / `active` (resumed) / `blocked`
  *   — rendered as a low-profile transcript marker.
- * - `verdict`: an evaluator verdict that did not change status (e.g.
- *   `no_progress`), also rendered as a marker.
  * - `completion`: the goal completed successfully (the only outcome that posts
  *   the completion message and clears the record). This replaced the older
  *   `terminal` name, which since the state consolidation only ever meant
  *   `complete` — `blocked` is a resumable `lifecycle` change, not a completion.
  */
-export type GoalChangeKind = 'lifecycle' | 'verdict' | 'completion';
+export type GoalChangeKind = 'lifecycle' | 'completion';
 
 export interface GoalChange {
   readonly kind: GoalChangeKind;
   readonly status?: GoalStatus;
-  readonly verdict?: string;
   readonly reason?: string;
   readonly evidence?: readonly GoalEvidence[];
   readonly stats?: GoalChangeStats;
@@ -261,19 +262,21 @@ export interface SessionGoalStoreOptions {
    * accounting, to avoid chatty updates.
    */
   readonly onGoalUpdated?: (snapshot: GoalSnapshot | null, change?: GoalChange) => void;
+  /** Injectable clock (epoch ms) for the live wall-clock timer; tests override it. */
+  readonly now?: () => number;
 }
 
 /**
  * Single durable owner of the current goal.
  *
  * Lifecycle rules (see the {@link GoalStatus} union for the full per-status map):
- * - Success: only the continuation controller calls `markComplete`, carrying the
- *   independent evaluator's `complete` verdict. The model has no direct say in
- *   the goal's status — the evaluator judges completion from the conversation.
- *   `markComplete` announces, then clears the record.
+ * - Success: `markComplete` records success then clears the record (transient).
+ *   The model marks completion via the `UpdateGoal('complete')` tool; the turn
+ *   driver reads the status at the turn boundary. `markComplete` announces, then
+ *   clears the record.
  * - System stop: `markBlocked(reason)` sets `blocked` for any reason the system
- *   stops pursuing — evaluator `blocked` verdict, no-progress limit, a hard budget,
- *   a `maxStepsPerTurn` cap, or a runtime/evaluator failure. `blocked` is resumable.
+ *   stops pursuing — the model's `UpdateGoal('blocked')`, a hard budget, or a
+ *   runtime error. `blocked` is resumable.
  * - User stop: `pauseGoal` and the interrupt path `pauseOnInterrupt` set `paused`
  *   (resumable); `cancelGoal` discards the record entirely (no status — this is
  *   what `/goal cancel` does, the single remove action).
@@ -286,6 +289,11 @@ export class SessionGoalStore {
   private readonly pending: AgentRecord[] = [];
 
   constructor(private readonly options: SessionGoalStoreOptions) {}
+
+  /** Current epoch ms from the injectable clock (defaults to `Date.now`). */
+  private nowMs(): number {
+    return this.options.now?.() ?? Date.now();
+  }
 
   // --- Audit -------------------------------------------------------------
 
@@ -329,6 +337,11 @@ export class SessionGoalStore {
       await this.persistState(undefined);
       return;
     }
+
+    // The wall-clock anchor is a runtime timestamp; a persisted one is stale
+    // (it predates the downtime). Drop it so resumed time isn't counted as
+    // pursuit — `resumeGoal` re-anchors a fresh interval.
+    state.wallClockResumedAt = undefined;
 
     // `complete` is transient and should never rest on disk; a persisted one
     // means completion did not finish clearing. Drop it.
@@ -406,6 +419,7 @@ export class SessionGoalStore {
       consecutiveFailureTurns: 0,
       tokensUsed: 0,
       wallClockMs: 0,
+      wallClockResumedAt: this.nowMs(),
       budgetLimits: this.normalizeBudgetLimits(input.budgetLimits),
     };
     if (input.completionCriterion !== undefined && input.completionCriterion.trim().length > 0) {
@@ -599,24 +613,6 @@ export class SessionGoalStore {
     return this.toSnapshot(state);
   }
 
-  async recordWallClockUsage(input: { wallClockMs: number }): Promise<GoalSnapshot | null> {
-    const state = this.options.readState();
-    if (state === undefined || state.status !== 'active') return null;
-    const delta = Math.max(0, input.wallClockMs);
-    state.wallClockMs += delta;
-    state.updatedAt = new Date().toISOString();
-    await this.persistState(state, { silent: true }); // per-step: no UI update
-    this.appendAudit({
-      type: 'goal.account_usage',
-      goalId: state.goalId,
-      usageKind: 'wall_clock',
-      delta,
-      source: 'main_wall_clock',
-      tokensUsed: state.tokensUsed,
-      wallClockMs: state.wallClockMs,
-    });
-    return this.toSnapshot(state);
-  }
 
   async incrementTurn(input: { evidence?: readonly GoalEvidence[] } = {}): Promise<GoalSnapshot | null> {
     const state = this.options.readState();
@@ -629,61 +625,6 @@ export class SessionGoalStore {
       type: 'goal.continuation',
       goalId: state.goalId,
       turnsUsed: state.turnsUsed,
-    });
-    return this.toSnapshot(state);
-  }
-
-  async recordEvaluatorVerdict(input: {
-    verdict: string;
-    reason?: string;
-    evidence?: readonly GoalEvidence[];
-  }): Promise<GoalSnapshot | null> {
-    const state = this.options.readState();
-    if (state === undefined || state.status !== 'active') return null;
-    state.lastEvaluatorVerdict = input.verdict;
-    state.lastEvaluatorReason = input.reason;
-    if (input.evidence !== undefined) state.lastEvidence = input.evidence;
-    if (input.verdict === 'no_progress') {
-      state.consecutiveNoProgressTurns += 1;
-    } else {
-      state.consecutiveNoProgressTurns = 0;
-    }
-    // A produced verdict means the evaluator ran successfully.
-    state.consecutiveFailureTurns = 0;
-    state.updatedAt = new Date().toISOString();
-    await this.persistState(state, {
-      change: {
-        kind: 'verdict',
-        verdict: input.verdict,
-        reason: input.reason,
-        evidence: input.evidence,
-      },
-    });
-    this.appendAudit({
-      type: 'goal.evaluate',
-      goalId: state.goalId,
-      verdict: input.verdict,
-      reason: input.reason,
-      evidence: input.evidence,
-    });
-    return this.toSnapshot(state);
-  }
-
-  /**
-   * Records a failed evaluator run (invalid JSON or a thrown evaluator call).
-   * Increments the consecutive-failure counter that `failureTurnLimit` checks.
-   */
-  async recordEvaluatorFailure(input: { reason?: string } = {}): Promise<GoalSnapshot | null> {
-    const state = this.options.readState();
-    if (state === undefined || state.status !== 'active') return null;
-    state.consecutiveFailureTurns += 1;
-    state.updatedAt = new Date().toISOString();
-    await this.persistState(state);
-    this.appendAudit({
-      type: 'goal.evaluate',
-      goalId: state.goalId,
-      verdict: 'error',
-      reason: input.reason,
     });
     return this.toSnapshot(state);
   }
@@ -723,6 +664,17 @@ export class SessionGoalStore {
     actor: GoalActor,
     _reason?: string,
   ): void {
+    // Fold the live wall-clock interval into the running total when leaving
+    // `active`, and anchor a fresh interval when entering it, so `wallClockMs`
+    // stays a correct, persistable total across pause/resume/complete.
+    const now = this.nowMs();
+    if (state.status === 'active' && state.wallClockResumedAt !== undefined) {
+      state.wallClockMs += Math.max(0, now - state.wallClockResumedAt);
+      state.wallClockResumedAt = undefined;
+    }
+    if (status === 'active') {
+      state.wallClockResumedAt = now;
+    }
     state.status = status;
     state.updatedBy = actor;
     state.updatedAt = new Date().toISOString();
@@ -760,7 +712,7 @@ export class SessionGoalStore {
     return {
       turnsUsed: state.turnsUsed,
       tokensUsed: state.tokensUsed,
-      wallClockMs: state.wallClockMs,
+      wallClockMs: liveWallClockMs(state, this.nowMs()),
     };
   }
 
@@ -791,10 +743,8 @@ export class SessionGoalStore {
       consecutiveNoProgressTurns: state.consecutiveNoProgressTurns,
       consecutiveFailureTurns: state.consecutiveFailureTurns,
       tokensUsed: state.tokensUsed,
-      wallClockMs: state.wallClockMs,
-      budget: computeBudgetReport(state),
-      lastEvaluatorVerdict: state.lastEvaluatorVerdict,
-      lastEvaluatorReason: state.lastEvaluatorReason,
+      wallClockMs: liveWallClockMs(state, this.nowMs()),
+      budget: computeBudgetReport(state, this.nowMs()),
       lastEvidence: state.lastEvidence,
       terminalReason: state.terminalReason,
       terminalEvidence: state.terminalEvidence,
@@ -827,16 +777,32 @@ export function isValidGoalState(value: unknown): value is SessionGoalState {
   );
 }
 
-export function computeBudgetReport(state: SessionGoalState): GoalBudgetReport {
+/**
+ * Live active-pursuit time: the accumulated total plus the in-flight `active`
+ * interval. Correct even when read mid-turn (the interval isn't folded into
+ * `wallClockMs` until the goal leaves `active`).
+ */
+export function liveWallClockMs(state: SessionGoalState, now: number = Date.now()): number {
+  if (state.status === 'active' && state.wallClockResumedAt !== undefined) {
+    return state.wallClockMs + Math.max(0, now - state.wallClockResumedAt);
+  }
+  return state.wallClockMs;
+}
+
+export function computeBudgetReport(
+  state: SessionGoalState,
+  now: number = Date.now(),
+): GoalBudgetReport {
   const limits = state.budgetLimits;
   const tokenBudget = limits.tokenBudget ?? null;
   const turnBudget = limits.turnBudget ?? null;
   const wallClockBudgetMs = limits.wallClockBudgetMs ?? null;
+  const wallClockMs = liveWallClockMs(state, now);
 
   const tokenBudgetReached = tokenBudget !== null && state.tokensUsed >= tokenBudget;
   const turnBudgetReached = turnBudget !== null && state.turnsUsed >= turnBudget;
   const wallClockBudgetReached =
-    wallClockBudgetMs !== null && state.wallClockMs >= wallClockBudgetMs;
+    wallClockBudgetMs !== null && wallClockMs >= wallClockBudgetMs;
 
   return {
     tokenBudget,
@@ -845,7 +811,7 @@ export function computeBudgetReport(state: SessionGoalState): GoalBudgetReport {
     remainingTokens: tokenBudget === null ? null : Math.max(0, tokenBudget - state.tokensUsed),
     remainingTurns: turnBudget === null ? null : Math.max(0, turnBudget - state.turnsUsed),
     remainingWallClockMs:
-      wallClockBudgetMs === null ? null : Math.max(0, wallClockBudgetMs - state.wallClockMs),
+      wallClockBudgetMs === null ? null : Math.max(0, wallClockBudgetMs - wallClockMs),
     tokenBudgetReached,
     turnBudgetReached,
     wallClockBudgetReached,

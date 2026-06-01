@@ -1,11 +1,12 @@
 import type { GoalSnapshot } from '../../session/goal';
 
 /**
- * The deterministic goal-completion message. When the evaluator confirms a goal
- * `complete`, the continuation controller appends this verbatim as an assistant
+ * The deterministic goal-completion message. When the model marks a goal
+ * `complete` via UpdateGoal, the tool appends this verbatim as an assistant
  * message (so it persists in the conversation and renders on resume), and the
- * TUI renders the same text live. It is built from the final snapshot — not the
- * model — so the figures (turns / tokens / time) are guaranteed exact.
+ * TUI renders the same text live off the completion event. It is built from the
+ * final snapshot — not the model — so the figures (turns / tokens / time) are
+ * guaranteed exact.
  */
 export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
   const head = `✓ Goal complete${goal.terminalReason ? ` — ${goal.terminalReason}` : ''}.`;

@@ -51,10 +51,9 @@ export class GoalMarkerComponent implements Component {
 }
 
 /**
- * Builds a marker for a lifecycle / verdict change, or `null` when the change
- * should be silent (a plain `continue` verdict, or a `completion` change —
- * completion posts its own message, not a marker). `expanded` seeds the initial
- * ctrl+o state.
+ * Builds a marker for a lifecycle change (paused / resumed / blocked), or `null`
+ * when the change should be silent (a `completion` change posts its own message,
+ * not a marker). `expanded` seeds the initial ctrl+o state.
  */
 export function buildGoalMarker(
   change: GoalChange,
@@ -72,11 +71,6 @@ function markerSpec(
   change: GoalChange,
   colors: ColorPalette,
 ): { headline: string; accentHex: string } | null {
-  if (change.kind === 'verdict') {
-    return change.verdict === 'no_progress'
-      ? { headline: 'Goal: no progress', accentHex: colors.warning }
-      : null; // continue / other verdicts are silent
-  }
   if (change.kind === 'lifecycle') {
     switch (change.status) {
       case 'paused':

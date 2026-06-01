@@ -6,6 +6,8 @@ import {
   CreateGoalTool,
   CreateGoalToolInputSchema,
   GetGoalTool,
+  UpdateGoalTool,
+  UpdateGoalToolInputSchema,
 } from '../../src/tools/builtin';
 import { SessionGoalStore, type SessionGoalState } from '../../src/session/goal';
 import { testAgent } from '../agent/harness/agent';
@@ -124,6 +126,48 @@ describe('GetGoalTool', () => {
   });
 });
 
+describe('UpdateGoalTool', () => {
+  // The complete path appends a completion message, so the agent needs a context.
+  function agentWithContext(store: SessionGoalStore): Agent {
+    return {
+      type: 'main',
+      goals: store,
+      context: { appendMessage: () => {} },
+    } as unknown as Agent;
+  }
+
+  it('accepts only complete / paused / blocked', () => {
+    for (const status of ['complete', 'paused', 'blocked']) {
+      expect(UpdateGoalToolInputSchema.safeParse({ status }).success).toBe(true);
+    }
+    for (const status of ['active', 'impossible', 'cancelled', '']) {
+      expect(UpdateGoalToolInputSchema.safeParse({ status }).success).toBe(false);
+    }
+  });
+
+  it('`complete` marks the goal complete and clears it (transient)', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    const result = await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'complete' }));
+    expect(result.isError).toBeFalsy();
+    expect(store.getGoal().goal).toBeNull();
+  });
+
+  it('`blocked` marks the goal blocked (resumable)', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'blocked' }));
+    expect(store.getGoal().goal?.status).toBe('blocked');
+  });
+
+  it('`paused` marks the goal paused', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'paused' }));
+    expect(store.getGoal().goal?.status).toBe('paused');
+  });
+});
+
 describe('goal tools are main-agent-only', () => {
   it('all goal tools return isError on a non-main agent', async () => {
     const store = makeStore();
@@ -169,6 +213,19 @@ describe('ToolManager goal tool registration', () => {
     const names = loopToolNames('sub');
     expect(names).not.toContain('CreateGoal');
     expect(names).not.toContain('GetGoal');
+  });
+
+  it('hides UpdateGoal until a goal exists, then exposes it', async () => {
+    process.env[GOAL_FLAG] = 'true';
+    const store = makeStore();
+    const ctxAgent = testAgent({ type: 'main', goals: store });
+    ctxAgent.configure({ tools: ['Read', 'CreateGoal', 'GetGoal', 'UpdateGoal'] });
+    ctxAgent.agent.tools.initializeBuiltinTools();
+    // No goal yet -> UpdateGoal is filtered out of the model's tool list.
+    expect(ctxAgent.agent.tools.loopTools.map((t) => t.name)).not.toContain('UpdateGoal');
+    // Once a goal exists, it appears.
+    await store.createGoal({ objective: 'work' });
+    expect(ctxAgent.agent.tools.loopTools.map((t) => t.name)).toContain('UpdateGoal');
   });
 });
 

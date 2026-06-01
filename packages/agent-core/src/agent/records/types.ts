@@ -114,12 +114,6 @@ export interface AgentRecordEvents {
     goalId: string;
     turnsUsed: number;
   };
-  'goal.evaluate': {
-    goalId: string;
-    verdict: string;
-    reason?: string;
-    evidence?: readonly GoalEvidence[];
-  };
   'goal.clear': {
     goalId: string;
     actor: GoalActor;

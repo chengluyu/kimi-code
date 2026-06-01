@@ -10,22 +10,6 @@ function strip(lines: string[]): string {
 }
 
 describe('buildGoalMarker', () => {
-  it('builds a marker for a no_progress verdict', () => {
-    const marker = buildGoalMarker(
-      { kind: 'verdict', verdict: 'no_progress', reason: 'spinning' } as GoalChange,
-      darkColors,
-      false,
-    );
-    expect(marker).not.toBeNull();
-    expect(strip(marker!.render(80))).toContain('Goal: no progress');
-  });
-
-  it('is silent for a continue verdict', () => {
-    expect(
-      buildGoalMarker({ kind: 'verdict', verdict: 'continue' } as GoalChange, darkColors, false),
-    ).toBeNull();
-  });
-
   it('builds lifecycle markers for paused / resumed / blocked', () => {
     const paused = buildGoalMarker({ kind: 'lifecycle', status: 'paused' } as GoalChange, darkColors, false);
     const resumed = buildGoalMarker({ kind: 'lifecycle', status: 'active' } as GoalChange, darkColors, false);

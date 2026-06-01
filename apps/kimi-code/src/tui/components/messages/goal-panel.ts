@@ -8,12 +8,12 @@
  *
  *   Status     complete — <reason>        (terminal goals only)
  *   Running    4m 12s
- *   Turns      7 evaluated
+ *   Turns      7
  *   Tokens     128.4k
- *   Evaluator  continue — <reason>
  *   Stop       after 20 turns (7/20)      (or a dim "no stop condition" note)
  */
 
+import type { Component } from '@earendil-works/pi-tui';
 import type { GoalSnapshot, GoalStatus } from '@moonshot-ai/kimi-code-sdk';
 import chalk from 'chalk';
 
@@ -24,6 +24,31 @@ const WRAP_WIDTH = 72;
 const MAX_OBJECTIVE_LINES = 6;
 const MAX_CRITERION_LINES = 3;
 const LABEL_WIDTH = 11;
+const SET_INDENT = '  ';
+
+/**
+ * The "Goal set" confirmation shown after `/goal <objective>`. Renders a leading
+ * blank line, a `Goal set` label, then the objective wrapped with every line
+ * indented (a hanging indent), so a long objective reads as one tidy block
+ * rather than spilling to column 0.
+ */
+export class GoalSetMessageComponent implements Component {
+  constructor(
+    private readonly objective: string,
+    private readonly colors: ColorPalette,
+  ) {}
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    const wrapWidth = Math.max(20, Math.min(WRAP_WIDTH, width) - SET_INDENT.length);
+    const lines = ['', `${SET_INDENT}${chalk.hex(this.colors.textStrong)('Goal set')}`];
+    for (const line of wrap(this.objective, wrapWidth, MAX_OBJECTIVE_LINES)) {
+      lines.push(SET_INDENT + chalk.hex(this.colors.textDim)(line));
+    }
+    return lines;
+  }
+}
 
 export interface GoalReportOptions {
   readonly colors: ColorPalette;
@@ -61,7 +86,7 @@ export function buildGoalReportLines(options: GoalReportOptions): string[] {
   const row = (label: string, val: string): string => `${muted(label.padEnd(LABEL_WIDTH))}${val}`;
 
   if (showReason) {
-    const reason = goal.terminalReason ?? goal.lastEvaluatorReason;
+    const reason = goal.terminalReason;
     lines.push(
       row(
         'Status',
@@ -71,17 +96,8 @@ export function buildGoalReportLines(options: GoalReportOptions): string[] {
     );
   }
   lines.push(row('Running', value(formatElapsed(goal.wallClockMs))));
-  lines.push(row('Turns', value(`${goal.turnsUsed} evaluated`)));
+  lines.push(row('Turns', value(`${goal.turnsUsed}`)));
   lines.push(row('Tokens', value(formatTokenCount(goal.tokensUsed))));
-  if (goal.lastEvaluatorVerdict !== undefined) {
-    lines.push(
-      row(
-        'Evaluator',
-        value(goal.lastEvaluatorVerdict) +
-          (goal.lastEvaluatorReason !== undefined ? muted(` — ${goal.lastEvaluatorReason}`) : ''),
-      ),
-    );
-  }
   if (!isComplete) {
     const stop = formatStopRow(goal);
     lines.push(

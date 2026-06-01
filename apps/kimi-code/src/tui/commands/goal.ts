@@ -1,6 +1,6 @@
 import { ErrorCodes, isKimiError } from '@moonshot-ai/kimi-code-sdk';
 
-import { buildGoalReportLines, goalPanelTitle } from '../components/messages/goal-panel';
+import { buildGoalReportLines, GoalSetMessageComponent, goalPanelTitle } from '../components/messages/goal-panel';
 import { UsagePanelComponent } from '../components/messages/usage-panel';
 import { LLM_NOT_SET_MESSAGE } from '../constant/kimi-tui';
 import { formatErrorMessage } from '../utils/event-payload';
@@ -115,7 +115,10 @@ async function createGoal(
     return;
   }
   host.track('goal_create', { replace: parsed.replace });
-  host.showStatus(`Goal set: ${parsed.objective}`);
+  host.state.transcriptContainer.addChild(
+    new GoalSetMessageComponent(parsed.objective, host.state.theme.colors),
+  );
+  host.state.ui.requestRender();
   host.sendNormalUserInput(parsed.objective);
 }
 

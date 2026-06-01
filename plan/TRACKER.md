@@ -199,6 +199,63 @@ cleanups are now fixed.
   state its conclusion explicitly (no tool), noting an independent evaluator decides.
 - **Note:** `CreateGoal` and `GetGoal` remain (they do real work — create/inspect the goal).
 
+### Refactor: sequential-turn goal driver (mega-turn → driveGoal) + minimal `UpdateGoal(status)`
+
+A goal used to run as one *mega-turn*: the continuation controller reached into the loop
+(`shouldContinueAfterStop` / `shouldContinueOnMaxSteps` / `resetStepBudget`) to keep a single
+`runTurn` alive across many segments. That leaked complexity into the shared loop and produced odd
+UX (one giant turn, whole-turn cancellation, the self-audit echoed in both reasoning and answer).
+Replaced with the honest model: a goal is **N sequential ordinary turns** driven by a loop — the
+autonomous stand-in for the user typing "continue".
+
+- **Loop primitive (`loop/run-turn.ts`, `loop/types.ts`):** deleted `shouldContinueOnMaxSteps`,
+  `MaxStepsDecision`, `LoopMaxStepsContext`, and the `stepBudgetBase`/`resetStepBudget` segment
+  machinery. `maxSteps` bounds a (normal) turn again; `shouldContinueAfterStop` stays for steer +
+  the external Stop hook only.
+- **`TurnFlow` (`agent/turn/index.ts`):** split into `runOneTurn` (one full turn, goal-agnostic,
+  owns `turn.started`/`turn.ended` + per-turn bookkeeping) and `driveGoal` (the sequential driver).
+  `turnWorker` gates on `goals.currentGoal?.status === 'active'` → `driveGoal` else `runOneTurn`.
+  The driver runs a turn, accounts turn/wall-clock, enforces hard budgets (`overBudget` → blocked),
+  then reads the status the model set: cleared = `complete`, `blocked`/`paused` stop, `active`
+  re-injects the reminder and runs the next turn. Abort → pause; failure → blocked.
+  - **Gate rationale:** the app only has the `prompt` RPC, so the single-vs-driver choice must be
+    server-side. `status === 'active'` is a sufficient signal because `active` is produced *only* by
+    create/resume (each immediately followed by a prompt) and every stop clears it; resume demotes a
+    stale `active` to `paused`. So there's never an "active but idle" goal to mis-trigger the gate.
+  - **Subtlety fixed:** the terminal `turn.ended` and the `activeTurn` release must happen in the
+    *same synchronous frame* (the old code did; the naive split introduced an `await` between them,
+    so a test/host prompting right after `turn.ended` hit the busy guard and hung). `runOneTurn` now
+    emits `turn.ended` and clears `activeTurn` (for standalone turns) together; the error event is
+    emitted just after `turn.ended`, as before.
+- **`UpdateGoal(status)` recovered, minimal:** single enum arg `complete | paused | blocked`,
+  mapping to `markComplete` / `pauseGoal` / `markBlocked` (actor `model`); `complete` appends the
+  deterministic completion message. Registered like its siblings but **filtered out of `loopTools`
+  when no goal exists**, so the model only sees it during a goal. This replaces the evaluator: the
+  model owns its terminal status directly; the driver just reads it at each boundary.
+- **Removed:** `agent/goal/continuation.ts` and `agent/goal/evaluator.ts`; the
+  `recordEvaluatorVerdict` / `recordEvaluatorFailure` store methods, `lastEvaluator*` fields, the
+  `goal.evaluate` audit record, the `'verdict'` `GoalChangeKind`, the "Latest evaluator verdict"
+  reminder/panel lines, and `goalEvaluatorFactory`. The no-progress/failure streak counters stay in
+  the store **dormant** (the backstop, below, will revisit them) but nothing increments them now.
+- **Deferred — the backstop:** there is currently no automatic stop for a model that loops without
+  ever calling `UpdateGoal`. The hard ceiling is existing resource exhaustion (context/budget). The
+  refined reminder-based backstop is captured below.
+
+### Backstop (refined; not yet implemented)
+
+The driver makes this trivial and number-free. Each boundary it already knows, for free, whether the
+turn took any action and what the status is. So:
+
+- **Trigger:** a continuation turn that took **no tool action** *and* left the status **active**
+  (the model continued without doing or deciding anything) — the exact runaway signature, detectable
+  with zero thresholds, firing the first time it happens.
+- **Response:** inject one firm reminder before the next turn — *"your last turn took no action and
+  didn't update the goal; decide now: `UpdateGoal('complete')`, `UpdateGoal('blocked')`, or make real
+  progress"* — escalating if it recurs. A reminder, never a kill (a false positive on a pure-thinking
+  turn costs nothing).
+- **Hard floor:** existing resource ceilings (context window / configured token budget), not a new
+  goal-specific magic number.
+
 ## Post-implementation fixes
 
 ### Fix: `maxStepsPerTurn` no longer fatally caps long goals (continuation checkpoint)

@@ -18,8 +18,6 @@ import type { McpConnectionManager } from '../mcp';
 import type { PreparedSystemPromptContext, ResolvedAgentProfile } from '../profile';
 import type { ModelProvider } from '../session/provider-manager';
 import type { SessionGoalStore } from '../session/goal';
-import type { GoalEvaluatorLike } from './goal/continuation';
-import type { LLM } from '../loop/llm';
 import type { SessionSubagentHost } from '../session/subagent-host';
 import type { SkillRegistry } from '../skill';
 import { noopTelemetryClient, type TelemetryClient } from '../telemetry';
@@ -80,8 +78,6 @@ export interface AgentOptions {
   readonly skills?: SkillRegistry;
   readonly mcp?: McpConnectionManager;
   readonly goals?: SessionGoalStore | undefined;
-  /** Seam for a custom goal evaluator (a future lightweight judge model, or a test fake). */
-  readonly goalEvaluatorFactory?: ((llm: LLM) => GoalEvaluatorLike) | undefined;
   readonly hookEngine?: HookEngine;
   readonly permission?: PermissionManagerOptions | undefined;
   readonly log?: Logger;
@@ -102,7 +98,6 @@ export class Agent {
   readonly subagentHost?: SessionSubagentHost;
   readonly mcp?: McpConnectionManager;
   readonly goals?: SessionGoalStore;
-  readonly goalEvaluatorFactory?: (llm: LLM) => GoalEvaluatorLike;
   readonly hooks?: HookEngine;
   readonly log: Logger;
   readonly telemetry: TelemetryClient;
@@ -138,7 +133,6 @@ export class Agent {
     this.subagentHost = options.subagentHost;
     this.mcp = options.mcp;
     this.goals = options.goals;
-    this.goalEvaluatorFactory = options.goalEvaluatorFactory;
     this.hooks = options.hookEngine;
     this.log = options.log ?? log;
     this.telemetry = options.telemetry ?? noopTelemetryClient;

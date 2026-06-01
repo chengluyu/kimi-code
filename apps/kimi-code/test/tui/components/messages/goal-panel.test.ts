@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalReportLines, goalPanelTitle } from '#/tui/components/messages/goal-panel';
+import {
+  buildGoalReportLines,
+  GoalSetMessageComponent,
+  goalPanelTitle,
+} from '#/tui/components/messages/goal-panel';
 import { darkColors } from '#/tui/theme/colors';
 import type { GoalSnapshot } from '@moonshot-ai/kimi-code-sdk';
 
@@ -36,7 +40,7 @@ describe('buildGoalReportLines', () => {
     expect(out).toContain('▌ Ship the goal status box');
     expect(out).toContain('Running');
     expect(out).toContain('4m 12s');
-    expect(out).toContain('7 evaluated');
+    expect(out).toContain('Turns');
     expect(out).toContain('128.4k'); // formatTokenCount
   });
 
@@ -56,12 +60,6 @@ describe('buildGoalReportLines', () => {
     expect(out).toContain('✓ tests pass');
   });
 
-  it('shows the latest evaluator verdict and reason', () => {
-    const out = lines(goal({ lastEvaluatorVerdict: 'continue', lastEvaluatorReason: 'more to do' }));
-    expect(out).toContain('Evaluator');
-    expect(out).toContain('continue — more to do');
-  });
-
   it('renders a terminal goal with a Status row and no Stop row', () => {
     const out = lines(goal({ status: 'complete', terminalReason: 'all done' }));
     expect(out).toContain('Status');
@@ -79,5 +77,22 @@ describe('buildGoalReportLines', () => {
     const long = 'word '.repeat(200).trim();
     const out = lines(goal({ objective: long }));
     expect(out).toContain('…');
+  });
+});
+
+describe('GoalSetMessageComponent', () => {
+  it('leads with a blank line and indents every (wrapped) objective line', () => {
+    const objective =
+      'Generate a random number from 1 to 20 in each turn. Stop when you get 1 or you have finished at least 5 turns.';
+    const rendered = new GoalSetMessageComponent(objective, darkColors).render(60);
+    // Leading blank line separates it from the line above.
+    expect(rendered[0]).toBe('');
+    expect(strip([rendered[1]!])).toBe('  Goal set');
+    // The objective wraps to more than one line, and every line is indented.
+    const body = rendered.slice(2);
+    expect(body.length).toBeGreaterThan(1);
+    for (const line of body) {
+      expect(strip([line]).startsWith('  ')).toBe(true);
+    }
   });
 });

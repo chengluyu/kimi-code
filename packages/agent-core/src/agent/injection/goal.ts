@@ -39,7 +39,7 @@ export class GoalInjector extends DynamicInjector {
  * goal if the user asks, otherwise handle requests normally.
  */
 function buildBlockedNote(goal: GoalSnapshot): string {
-  const reason = goal.terminalReason ?? goal.lastEvaluatorReason;
+  const reason = goal.terminalReason;
   const lines: string[] = [];
   lines.push(
     `There is a goal, currently blocked${reason ? ` (${reason})` : ''}. It is not being ` +
@@ -99,20 +99,15 @@ function buildGoalReminder(goal: GoalSnapshot): string {
   }
   lines.push(budgetBandGuidance(goal));
 
-  if (goal.lastEvaluatorVerdict !== undefined) {
-    lines.push(
-      `Latest evaluator verdict: ${goal.lastEvaluatorVerdict}${goal.lastEvaluatorReason ? ` — ${goal.lastEvaluatorReason}` : ''}.`,
-    );
-  }
-
   lines.push('');
   lines.push(
-    'Each time you resume, first self-audit against the objective and any completion criteria above ' +
-      'before doing more work. When the goal is finished, state clearly in your reply that it is ' +
-      '`complete` (only when no required work remains and any stated validation has passed) or ' +
-      '`blocked` (when an external condition or required user input prevents progress, or the ' +
-      'objective cannot be completed as stated), and say why, citing validation evidence when ' +
-      'available. An independent evaluator reads this conversation and decides whether the goal ends.',
+    'Each turn, first self-audit against the objective and any completion criteria above before ' +
+      'doing more work. When the goal is finished, call UpdateGoal with `complete` (only when no ' +
+      'required work remains and any stated validation has passed). If an external condition or ' +
+      'required user input prevents progress, or the objective cannot be completed as stated, call ' +
+      'UpdateGoal with `blocked`. Otherwise keep working — after your turn ends you will be prompted ' +
+      'to continue. Call UpdateGoal as soon as the goal is genuinely done or cannot proceed; don\'t ' +
+      'keep going once there is nothing left to do.',
   );
   return lines.join('\n');
 }

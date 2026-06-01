@@ -15,6 +15,11 @@ const DEFAULT_APPROVE_TOOLS = new Set([
   'Agent',
   'AskUserQuestion',
   'Skill',
+  // Goal control tools have no side effects on the world: GetGoal reads, and
+  // UpdateGoal only records the goal's own status (it's the model's only way to
+  // stop the goal, so prompting for it would be friction with no safety value).
+  'GetGoal',
+  'UpdateGoal',
 ]);
 
 export class DefaultToolApprovePermissionPolicy implements PermissionPolicy {

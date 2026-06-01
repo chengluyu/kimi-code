@@ -67,7 +67,7 @@ function activeState(overrides: Partial<SessionGoalState> = {}): SessionGoalStat
 }
 
 /** A simple in-memory backing for the goal store. */
-function makeStore() {
+function makeStore(opts: { now?: () => number } = {}) {
   let state: SessionGoalState | undefined;
   let writeCount = 0;
   const updates: (GoalSnapshot | null)[] = [];
@@ -83,6 +83,7 @@ function makeStore() {
       updates.push(snapshot);
       changes.push(change);
     },
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
   });
   return {
     store,
@@ -165,16 +166,13 @@ describe('SessionGoalStore creation', () => {
     expect(updates().at(-1)).toBeNull();
   });
 
-  it('emits a typed change for lifecycle, verdict, and completion transitions', async () => {
+  it('emits a typed change for lifecycle and completion transitions', async () => {
     const { store, changes } = makeStore();
     await store.createGoal({ objective: 'work' }); // snapshot-only (no change)
     expect(changes().at(-1)).toBeUndefined();
 
     await store.incrementTurn(); // snapshot-only refresh
     expect(changes().at(-1)).toBeUndefined();
-
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'spinning' });
-    expect(changes().at(-1)).toMatchObject({ kind: 'verdict', verdict: 'no_progress', reason: 'spinning' });
 
     await store.pauseGoal();
     expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'paused' });
@@ -309,7 +307,8 @@ describe('SessionGoalStore budgets', () => {
   });
 
   it('computes token, turn, and wall-clock budget flags independently', async () => {
-    const { store } = makeStore();
+    let clock = 1_000;
+    const { store } = makeStore({ now: () => clock });
     await store.createGoal({
       objective: 'work',
       budgetLimits: { tokenBudget: 100, turnBudget: 2, wallClockBudgetMs: 1000 },
@@ -326,7 +325,8 @@ describe('SessionGoalStore budgets', () => {
     snap = store.getGoal().goal!;
     expect(snap.budget.turnBudgetReached).toBe(true);
 
-    await store.recordWallClockUsage({ wallClockMs: 1000 });
+    // Live wall-clock: advancing the clock past the budget trips the flag.
+    clock += 1_000;
     snap = store.getGoal().goal!;
     expect(snap.budget.wallClockBudgetReached).toBe(true);
   });
@@ -341,12 +341,17 @@ describe('SessionGoalStore accounting', () => {
     expect(store.getGoal().goal?.tokensUsed).toBe(42);
   });
 
-  it('accumulates sub-second wall-clock values', async () => {
-    const { store } = makeStore();
+  it('tracks live wall-clock from when the goal became active', async () => {
+    let clock = 10_000;
+    const { store } = makeStore({ now: () => clock });
     await store.createGoal({ objective: 'work' });
-    await store.recordWallClockUsage({ wallClockMs: 250 });
-    await store.recordWallClockUsage({ wallClockMs: 250 });
+    clock += 500;
     expect(store.getGoal().goal?.wallClockMs).toBe(500);
+    // Folds the interval and stops counting once the goal leaves `active`.
+    clock += 250;
+    await store.pauseGoal();
+    clock += 9_999; // paused time must not accrue
+    expect(store.getGoal().goal?.wallClockMs).toBe(750);
   });
 
   it('incrementTurn counts continuation cycles', async () => {
@@ -366,18 +371,6 @@ describe('SessionGoalStore accounting', () => {
     const snap = store.getGoal().goal!;
     expect(snap.tokensUsed).toBe(0);
     expect(snap.turnsUsed).toBe(0);
-  });
-});
-
-describe('SessionGoalStore verdicts', () => {
-  it('recordEvaluatorVerdict tracks no-progress streaks', async () => {
-    const { store } = makeStore();
-    await store.createGoal({ objective: 'work' });
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'stuck' });
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'stuck' });
-    expect(store.getGoal().goal?.consecutiveNoProgressTurns).toBe(2);
-    await store.recordEvaluatorVerdict({ verdict: 'continue', reason: 'moving' });
-    expect(store.getGoal().goal?.consecutiveNoProgressTurns).toBe(0);
   });
 });
 
@@ -416,18 +409,13 @@ describe('SessionGoalStore lifecycle', () => {
 
   it('resumeGoal is a fresh attempt: clears the stop reason and resets stuck/failure streaks', async () => {
     const { store } = makeStore();
-    await store.createGoal({ objective: 'work', budgetLimits: { noProgressTurnLimit: 3 } });
-    // Accumulate a no-progress streak up to the limit, then block.
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'stuck' });
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'stuck' });
-    await store.recordEvaluatorVerdict({ verdict: 'no_progress', reason: 'stuck' });
-    await store.markBlocked({ reason: 'No progress after 3 turns' });
-    expect(store.getGoal().goal?.consecutiveNoProgressTurns).toBe(3);
+    await store.createGoal({ objective: 'work' });
+    await store.markBlocked({ reason: 'need creds' });
 
     const resumed = await store.resumeGoal();
     expect(resumed.status).toBe('active');
     expect(resumed.terminalReason).toBeUndefined();
-    // The streak is reset so the goal gets a full fresh run, not one strike.
+    // Streak counters are reset so the goal gets a full fresh run.
     expect(resumed.consecutiveNoProgressTurns).toBe(0);
     expect(resumed.consecutiveFailureTurns).toBe(0);
   });
@@ -542,13 +530,12 @@ describe('SessionGoalStore audit records', () => {
     expect(types()).toEqual(['goal.create', 'goal.update', 'goal.clear']);
   });
 
-  it('accounting appends goal.account_usage with usage kind', async () => {
+  it('accounting appends goal.account_usage for token usage', async () => {
     const { store, records } = makeAuditStore();
     await store.createGoal({ objective: 'work' });
     await store.recordTokenUsage({ tokenDelta: 5, agentId: 'main', agentType: 'main', source: 'agent_step' });
-    await store.recordWallClockUsage({ wallClockMs: 100 });
     const usage = records.filter((r) => r.type === 'goal.account_usage');
-    expect(usage.map((r) => (r as { usageKind: string }).usageKind)).toEqual(['token', 'wall_clock']);
+    expect(usage.map((r) => (r as { usageKind: string }).usageKind)).toEqual(['token']);
   });
 
   it('incrementTurn appends goal.continuation', async () => {
@@ -556,13 +543,6 @@ describe('SessionGoalStore audit records', () => {
     await store.createGoal({ objective: 'work' });
     await store.incrementTurn();
     expect(types().at(-1)).toBe('goal.continuation');
-  });
-
-  it('recordEvaluatorVerdict appends goal.evaluate', async () => {
-    const { store, types } = makeAuditStore();
-    await store.createGoal({ objective: 'work' });
-    await store.recordEvaluatorVerdict({ verdict: 'continue', reason: 'progress' });
-    expect(types().at(-1)).toBe('goal.evaluate');
   });
 
   it('cancelGoal appends only goal.clear (cancel = discard)', async () => {
