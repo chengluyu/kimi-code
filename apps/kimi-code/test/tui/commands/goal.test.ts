@@ -98,19 +98,19 @@ describe('parseGoalCommand', () => {
     });
   });
 
-  it('keeps option-looking tokens as part of the objective (no budget flags)', () => {
-    // Budget flags were removed; stop conditions go in the objective as natural
-    // language, so a leading `--max-tokens` is just objective text.
-    expect(parseGoalCommand('--max-tokens 50000 Ship feature X')).toMatchObject({
+  it('keeps option-looking tokens as part of the objective (no goal flags)', () => {
+    // Goal command flags are not parsed after `/goal`; stop conditions go in the
+    // objective as natural language, so option-looking text stays objective text.
+    expect(parseGoalCommand('--retry-strategy Ship feature X')).toMatchObject({
       kind: 'create',
-      objective: '--max-tokens 50000 Ship feature X',
+      objective: '--retry-strategy Ship feature X',
     });
   });
 
   it('treats text after -- as the objective', () => {
-    expect(parseGoalCommand('-- --max-tokens is part of the goal')).toMatchObject({
+    expect(parseGoalCommand('-- --leading-option is part of the goal')).toMatchObject({
       kind: 'create',
-      objective: '--max-tokens is part of the goal',
+      objective: '--leading-option is part of the goal',
     });
     expect(parseGoalCommand('-- cancel')).toMatchObject({ kind: 'create', objective: 'cancel' });
   });
