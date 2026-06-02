@@ -120,6 +120,14 @@ describe('goal session end-to-end', () => {
     const firstHistory = JSON.stringify(scripted.calls[0]?.history ?? []);
     expect(firstHistory).toContain('<untrusted_objective>');
 
+    // After UpdateGoal runs, Anthropic-compatible providers require the next
+    // request to end with a user message, not an assistant prefill.
+    const afterUpdateGoalHistory = scripted.calls[2]?.history ?? [];
+    const lastAfterUpdateGoal = afterUpdateGoalHistory.at(-1);
+    expect(lastAfterUpdateGoal?.role).toBe('user');
+    expect(JSON.stringify(lastAfterUpdateGoal?.content)).toContain('<system-reminder>');
+    expect(JSON.stringify(lastAfterUpdateGoal?.content)).toContain('Goal complete.');
+
     // Completion is transient: it announces, then clears the durable record, so
     // the goal box disappears and nothing is left on disk.
     const raw = await readFile(join(sessionDir, 'state.json'), 'utf-8');

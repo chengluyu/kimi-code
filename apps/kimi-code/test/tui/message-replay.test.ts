@@ -217,6 +217,30 @@ function backgroundTask(
 }
 
 describe('KimiTUI resume message replay', () => {
+  it('renders persisted goal completion reminders as assistant completion messages', async () => {
+    const driver = await replayIntoDriver([
+      message(
+        'user',
+        [
+          {
+            type: 'text',
+            text: '<system-reminder>\n✓ Goal complete.\nWorked 1 turn over 7m15s, using 4.3M tokens.\n</system-reminder>',
+          },
+        ],
+        { origin: { kind: 'system_trigger', name: 'goal_completion' } },
+      ),
+    ]);
+
+    const entry = driver.state.transcriptEntries.find((item) =>
+      item.content.includes('Goal complete'),
+    );
+    expect(entry).toMatchObject({
+      kind: 'assistant',
+      renderMode: 'markdown',
+      content: '✓ Goal complete.\nWorked 1 turn over 7m15s, using 4.3M tokens.',
+    });
+  });
+
   it('groups replayed Agent calls from one assistant message using live grouping', async () => {
     const replay: AgentReplayRecord[] = [
       message('user', [{ type: 'text', text: 'run two agents' }]),

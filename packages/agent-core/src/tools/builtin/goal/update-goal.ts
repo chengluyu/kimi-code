@@ -48,14 +48,14 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
           if (args.status === 'complete') {
             const completed = await store.markComplete({ actor: 'model' });
             // `complete` is transient — markComplete announces then clears the
-            // record. Append the deterministic completion line as an assistant
-            // message so it persists in the conversation and renders on resume.
+            // record. Store the deterministic completion line as a system
+            // reminder, so the next provider request ends with a user message
+            // after the UpdateGoal tool result. Anthropic-compatible providers
+            // reject trailing assistant messages as unsupported prefill.
             if (completed !== null) {
-              this.agent.context.appendMessage({
-                role: 'assistant',
-                content: [{ type: 'text', text: buildGoalCompletionMessage(completed) }],
-                toolCalls: [],
-                origin: { kind: 'system_trigger', name: 'goal_completion' },
+              this.agent.context.appendSystemReminder(buildGoalCompletionMessage(completed), {
+                kind: 'system_trigger',
+                name: 'goal_completion',
               });
             }
             return { output: 'Goal marked complete.' };
