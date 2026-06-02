@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import { ErrorCodes, KimiError } from '#/errors';
 import type { AgentRecord } from '../agent/records/types';
+import {
+  noopTelemetryClient,
+  type TelemetryClient,
+  type TelemetryProperties,
+} from '../telemetry';
 
 /** Minimal audit sink the goal store writes `goal.*` records into. */
 export interface GoalAuditSink {
@@ -228,6 +233,8 @@ export interface SessionGoalStoreOptions {
    * accounting, to avoid chatty updates.
    */
   readonly onGoalUpdated?: (snapshot: GoalSnapshot | null, change?: GoalChange) => void;
+  /** Remote usage telemetry. Goal content and reasons are never reported. */
+  readonly telemetry?: TelemetryClient | undefined;
   /** Injectable clock (epoch ms) for the live wall-clock timer; tests override it. */
   readonly now?: () => number;
 }
@@ -253,8 +260,11 @@ export interface SessionGoalStoreOptions {
 export class SessionGoalStore {
   /** Audit records queued until the main-agent sink becomes available. */
   private readonly pending: AgentRecord[] = [];
+  private readonly telemetry: TelemetryClient;
 
-  constructor(private readonly options: SessionGoalStoreOptions) {}
+  constructor(private readonly options: SessionGoalStoreOptions) {
+    this.telemetry = options.telemetry ?? noopTelemetryClient;
+  }
 
   /** Current epoch ms from the injectable clock (defaults to `Date.now`). */
   private nowMs(): number {
@@ -399,6 +409,7 @@ export class SessionGoalStore {
       actor,
       budgetLimits: state.budgetLimits,
     });
+    this.trackGoalCreated(state, actor, input.replace === true);
     return this.toSnapshot(state);
   }
 
@@ -473,6 +484,10 @@ export class SessionGoalStore {
     state.updatedBy = input.actor ?? 'user';
     state.updatedAt = new Date().toISOString();
     await this.persistState(state);
+    this.track('goal_budget_set', {
+      actor: state.updatedBy,
+      ...budgetTelemetryProperties(input.budgetLimits),
+    });
     return this.toSnapshot(state);
   }
 
@@ -603,6 +618,9 @@ export class SessionGoalStore {
       goalId: state.goalId,
       turnsUsed: state.turnsUsed,
     });
+    this.track('goal_continued', {
+      turns_used: state.turnsUsed,
+    });
     return this.toSnapshot(state);
   }
 
@@ -614,6 +632,7 @@ export class SessionGoalStore {
     const goalId = state.goalId;
     await this.persistState(undefined);
     this.appendAudit({ type: 'goal.clear', goalId, actor, reason });
+    this.track('goal_cleared', { actor });
   }
 
   private appendStatusUpdate(state: SessionGoalState, actor: GoalActor, reason?: string): void {
@@ -627,6 +646,31 @@ export class SessionGoalStore {
       tokensUsed: state.tokensUsed,
       wallClockMs: state.wallClockMs,
     });
+    this.track('goal_status_changed', {
+      actor,
+      status: state.status,
+      turns_used: state.turnsUsed,
+      tokens_used: state.tokensUsed,
+      wall_clock_ms: liveWallClockMs(state, this.nowMs()),
+      ...budgetTelemetryProperties(state.budgetLimits),
+    });
+  }
+
+  private trackGoalCreated(
+    state: SessionGoalState,
+    actor: GoalActor,
+    replace: boolean,
+  ): void {
+    this.track('goal_created', {
+      actor,
+      replace,
+      has_completion_criterion: state.completionCriterion !== undefined,
+      ...budgetTelemetryProperties(state.budgetLimits),
+    });
+  }
+
+  private track(event: string, properties: TelemetryProperties): void {
+    this.telemetry.track(event, properties);
   }
 
   private applyStatus(
@@ -770,5 +814,13 @@ export function computeBudgetReport(
     turnBudgetReached,
     wallClockBudgetReached,
     overBudget: tokenBudgetReached || turnBudgetReached || wallClockBudgetReached,
+  };
+}
+
+function budgetTelemetryProperties(limits: GoalBudgetLimits): TelemetryProperties {
+  return {
+    has_token_budget: limits.tokenBudget !== undefined,
+    has_turn_budget: limits.turnBudget !== undefined,
+    has_wall_clock_budget: limits.wallClockBudgetMs !== undefined,
   };
 }

@@ -16,7 +16,9 @@ import {
 } from '../../src/session/goal';
 import type { AgentRecord } from '../../src/agent/records';
 import type { SDKSessionRPC } from '../../src/rpc';
+import type { TelemetryClient } from '../../src/telemetry';
 import { testKaos } from '../fixtures/test-kaos';
+import { recordingTelemetry, type TelemetryRecord } from '../fixtures/telemetry';
 
 const GOAL_FLAG = 'KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND';
 
@@ -66,7 +68,7 @@ function activeState(overrides: Partial<SessionGoalState> = {}): SessionGoalStat
 }
 
 /** A simple in-memory backing for the goal store. */
-function makeStore(opts: { now?: () => number } = {}) {
+function makeStore(opts: { now?: () => number; telemetry?: TelemetryClient } = {}) {
   let state: SessionGoalState | undefined;
   let writeCount = 0;
   const updates: (GoalSnapshot | null)[] = [];
@@ -82,6 +84,7 @@ function makeStore(opts: { now?: () => number } = {}) {
       updates.push(snapshot);
       changes.push(change);
     },
+    telemetry: opts.telemetry,
     ...(opts.now !== undefined ? { now: opts.now } : {}),
   });
   return {
@@ -135,6 +138,57 @@ describe('SessionGoalStore creation', () => {
     expect(snapshot.budget.tokenBudget).toBeNull();
     expect(snapshot.budget.wallClockBudgetMs).toBeNull();
     expect(snapshot.budget.overBudget).toBe(false);
+  });
+
+  it('tracks basic goal usage without sending goal text', async () => {
+    const records: TelemetryRecord[] = [];
+    const { store } = makeStore({ telemetry: recordingTelemetry(records) });
+
+    await store.createGoal({
+      objective: 'private objective',
+      completionCriterion: 'private criterion',
+      budgetLimits: { turnBudget: 3 },
+      replace: true,
+    });
+    await store.setBudgetLimits({
+      budgetLimits: { tokenBudget: 100 },
+      actor: 'model',
+    });
+    await store.incrementTurn();
+    await store.pauseGoal({ reason: 'private pause reason' });
+    await store.resumeGoal();
+    await store.markComplete({ actor: 'model', reason: 'private completion reason' });
+
+    expect(records.map((record) => record.event)).toEqual([
+      'goal_created',
+      'goal_budget_set',
+      'goal_continued',
+      'goal_status_changed',
+      'goal_status_changed',
+      'goal_status_changed',
+      'goal_cleared',
+    ]);
+    expect(records[0]?.properties).toMatchObject({
+      actor: 'user',
+      replace: true,
+      has_completion_criterion: true,
+      has_turn_budget: true,
+    });
+    expect(records[1]?.properties).toMatchObject({
+      actor: 'model',
+      has_token_budget: true,
+    });
+    expect(records[3]?.properties).toMatchObject({ status: 'paused', actor: 'user' });
+    expect(records[5]?.properties).toMatchObject({
+      status: 'complete',
+      actor: 'model',
+      turns_used: 1,
+    });
+    expect(records[6]?.properties).toEqual({ actor: 'model' });
+    expect(JSON.stringify(records)).not.toContain('private objective');
+    expect(JSON.stringify(records)).not.toContain('private criterion');
+    expect(JSON.stringify(records)).not.toContain('private pause reason');
+    expect(JSON.stringify(records)).not.toContain('private completion reason');
   });
 
   it('notifies onGoalUpdated on lifecycle changes but not on token accounting', async () => {

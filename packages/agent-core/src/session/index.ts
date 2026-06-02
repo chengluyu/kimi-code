@@ -147,6 +147,7 @@ export class Session {
       onGoalUpdated: (snapshot, change) => {
         void this.rpc.emitEvent({ type: 'goal.updated', agentId: 'main', snapshot, change });
       },
+      telemetry: this.telemetry,
     });
     this.skills = new SkillRegistry({ sessionId: options.id });
     this.mcp = new McpConnectionManager({
