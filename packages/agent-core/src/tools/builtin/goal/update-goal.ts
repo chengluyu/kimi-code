@@ -1,7 +1,8 @@
 /**
- * UpdateGoalTool — the model's single lever over the goal lifecycle. It sets the
- * goal's status directly; the turn driver reads the status at each turn boundary
- * and stops (`complete` / `blocked` / `paused`) or keeps going (still active).
+ * UpdateGoalTool — the model's single lever over the goal lifecycle. It updates
+ * the goal's status directly; the turn driver reads the status at each turn
+ * boundary and stops (`complete` / `blocked` / `paused`) or keeps going
+ * (`active`).
  *
  * The argument is intentionally just a status enum — no reason or evidence. The
  * model explains itself in its own reply; the status is the machine-readable
@@ -22,7 +23,7 @@ import DESCRIPTION from './update-goal.md';
 export const UpdateGoalToolInputSchema = z
   .object({
     status: z
-      .enum(['complete', 'paused', 'blocked'])
+      .enum(['active', 'complete', 'paused', 'blocked'])
       .describe('The lifecycle status to set for the current goal.'),
   })
   .strict();
@@ -45,6 +46,10 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
       approvalRule: this.name,
       execute: async () => {
         try {
+          if (args.status === 'active') {
+            await store.resumeGoal({ actor: 'model' });
+            return { output: 'Goal resumed.' };
+          }
           if (args.status === 'complete') {
             const completed = await store.markComplete({ actor: 'model' });
             // `complete` is transient — markComplete announces then clears the

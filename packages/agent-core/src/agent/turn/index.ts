@@ -69,10 +69,13 @@ const GOAL_CONTINUATION_ORIGIN: PromptOrigin = { kind: 'system_trigger', name: '
 const GOAL_CONTINUATION_PROMPT = [
   'Continue working toward the active goal.',
   'First, briefly self-audit: weigh the objective and any completion criteria against the work',
-  'done so far. If the goal is complete, call UpdateGoal with `complete`. If an external condition',
-  'or required user input prevents progress, or the objective cannot be completed as stated, call',
-  'UpdateGoal with `blocked`. Otherwise keep going — use the existing conversation context and your',
-  'tools, and do not ask the user for input unless a real blocker prevents progress.',
+  'done so far. Goal mode is iterative: do one coherent slice of work, then reassess. Call',
+  'UpdateGoal with `complete` only when all required work is done, any stated validation has',
+  'passed, and there is no useful next action. Do not mark complete after only producing a plan,',
+  'summary, first pass, or partial result. If an external condition or required user input prevents',
+  'progress, or the objective cannot be completed as stated, call UpdateGoal with `blocked`.',
+  'Otherwise keep going — use the existing conversation context and your tools, and do not ask the',
+  'user for input unless a real blocker prevents progress.',
 ].join(' ');
 
 export class TurnFlow {
@@ -257,10 +260,29 @@ export class TurnFlow {
       this.activeTurn !== 'resuming' &&
       this.activeTurn.controller.signal === signal;
     try {
-      if (this.goalRuntimeEnabled && this.agent.goals?.getGoal().goal?.status === 'active') {
+      const initialGoalStatus = this.agent.goals?.getGoal().goal?.status;
+      if (this.goalRuntimeEnabled && initialGoalStatus === 'active') {
         return await this.driveGoal(firstTurnId, input, origin, signal);
       }
-      return await this.runOneTurn(firstTurnId, input, origin, signal, true);
+      const end = await this.runOneTurn(firstTurnId, input, origin, signal, true);
+      const resumedFromPausedOrBlocked =
+        initialGoalStatus === 'paused' || initialGoalStatus === 'blocked';
+      const currentGoalStatus = this.agent.goals?.getGoal().goal?.status;
+      if (
+        this.goalRuntimeEnabled &&
+        resumedFromPausedOrBlocked &&
+        currentGoalStatus === 'active' &&
+        end.event.reason !== 'cancelled' &&
+        end.event.reason !== 'failed'
+      ) {
+        return await this.driveGoal(
+          this.allocateTurnId(),
+          [{ type: 'text', text: GOAL_CONTINUATION_PROMPT }],
+          GOAL_CONTINUATION_ORIGIN,
+          signal,
+        );
+      }
+      return end;
     } finally {
       if (ownsActiveTurn()) {
         this.activeTurn = null;

@@ -167,6 +167,38 @@ describe('goal session end-to-end', () => {
     expect(scripted.calls.length).toBe(1);
   });
 
+  it('continues goal mode after the model resumes a paused goal', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ objective: 'work' });
+    await api.pauseGoal({});
+
+    scripted.mockNextResponse({
+      type: 'function',
+      id: 'resume',
+      name: 'UpdateGoal',
+      arguments: JSON.stringify({ status: 'active' }),
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'Resumed the goal.' });
+    scripted.mockNextResponse({
+      type: 'function',
+      id: 'complete',
+      name: 'UpdateGoal',
+      arguments: JSON.stringify({ status: 'complete' }),
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'Done.' });
+
+    agent.turn.prompt([{ type: 'text', text: 'Keep working on the goal' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    expect(scripted.calls.length).toBeGreaterThanOrEqual(4);
+    expect(JSON.stringify(scripted.calls[0]?.history ?? [])).toContain('currently paused');
+    expect(JSON.stringify(scripted.calls[2]?.history ?? [])).toContain('Continue working toward the active goal');
+    expect(api.getGoal({}).goal).toBeNull();
+  });
+
   it('preserves terminal status and demotes active goals across resume', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];

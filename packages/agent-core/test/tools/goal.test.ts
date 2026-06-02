@@ -137,11 +137,11 @@ describe('UpdateGoalTool', () => {
     } as unknown as Agent;
   }
 
-  it('accepts only complete / paused / blocked', () => {
-    for (const status of ['complete', 'paused', 'blocked']) {
+  it('accepts only active / complete / paused / blocked', () => {
+    for (const status of ['active', 'complete', 'paused', 'blocked']) {
       expect(UpdateGoalToolInputSchema.safeParse({ status }).success).toBe(true);
     }
-    for (const status of ['active', 'impossible', 'cancelled', '']) {
+    for (const status of ['impossible', 'cancelled', '']) {
       expect(UpdateGoalToolInputSchema.safeParse({ status }).success).toBe(false);
     }
   });
@@ -166,6 +166,16 @@ describe('UpdateGoalTool', () => {
     await store.createGoal({ objective: 'work' });
     await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'paused' }));
     expect(store.getGoal().goal?.status).toBe('paused');
+  });
+
+  it('`active` resumes a paused goal', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    await store.pauseGoal();
+    const result = await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'active' }));
+    expect(result.isError).toBeFalsy();
+    expect(result.output).toBe('Goal resumed.');
+    expect(store.getGoal().goal?.status).toBe('active');
   });
 });
 

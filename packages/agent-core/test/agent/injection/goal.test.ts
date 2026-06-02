@@ -55,12 +55,15 @@ describe('GoalInjector content', () => {
     expect(await injectOnce(makeStore())).toBeUndefined();
   });
 
-  it('is silent for a paused goal (the user set it aside)', async () => {
+  it('tells the model not to work on a paused goal unless the user asks', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
     await store.pauseGoal();
-    // Pausing means "set it aside"; nothing is injected until `/goal resume`.
-    expect(await injectOnce(store)).toBeUndefined();
+    const text = (await injectOnce(store))!;
+    expect(text).toContain('currently paused');
+    expect(text).toContain('<untrusted_objective>\nwork\n</untrusted_objective>');
+    expect(text).toContain('Do not work on it unless the user explicitly asks');
+    expect(text).toContain('UpdateGoal with `active`');
   });
 
   it('produces a light note (with reason) for a blocked goal', async () => {
@@ -135,6 +138,15 @@ describe('GoalInjector content', () => {
     await store.createGoal({ objective: 'work' });
     const text = (await injectOnce(store))!;
     expect(text).toContain('UpdateGoal');
+  });
+
+  it('discourages completing a broad goal after a partial pass', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'fix the bugs' });
+    const text = (await injectOnce(store))!;
+    expect(text).toContain('Goal mode is iterative');
+    expect(text).toContain('one coherent slice of work');
+    expect(text).toContain('Do not mark complete after only producing a plan');
   });
 });
 
