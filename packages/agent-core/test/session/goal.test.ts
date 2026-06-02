@@ -8,7 +8,6 @@ import { ErrorCodes } from '../../src/errors';
 import { Session } from '../../src/session';
 import { SessionAPIImpl } from '../../src/session/rpc';
 import {
-  DEFAULT_GOAL_FAILURE_TURN_LIMIT,
   SessionGoalStore,
   type GoalAuditSink,
   type GoalChange,
@@ -57,8 +56,6 @@ function activeState(overrides: Partial<SessionGoalState> = {}): SessionGoalStat
     startedBy: 'user',
     updatedBy: 'user',
     turnsUsed: 0,
-    consecutiveNoProgressTurns: 0,
-    consecutiveFailureTurns: 0,
     tokensUsed: 0,
     wallClockMs: 0,
     budgetLimits: { turnBudget: 20 },
@@ -127,16 +124,15 @@ describe('SessionGoalStore creation', () => {
     expect(store.getGoal().goal?.goalId).toBe(snapshot.goalId);
   });
 
-  it('sets no default work caps but keeps a failure guard when none is provided', async () => {
+  it('sets no default work caps when none is provided', async () => {
     const { store } = makeStore();
     const snapshot = await store.createGoal({ objective: 'Do work' });
     // No default turn / token / time cap: an unbounded goal runs until the
-    // evaluator judges it terminal.
+    // model reports it terminal via UpdateGoal.
     expect(snapshot.budget.turnBudget).toBeNull();
     expect(snapshot.budget.tokenBudget).toBeNull();
     expect(snapshot.budget.wallClockBudgetMs).toBeNull();
-    // The malfunction guard is still defaulted.
-    expect(snapshot.budget.failureTurnLimit).toBe(DEFAULT_GOAL_FAILURE_TURN_LIMIT);
+    expect(snapshot.budget.overBudget).toBe(false);
   });
 
   it('notifies onGoalUpdated on lifecycle changes but not on token accounting', async () => {
@@ -181,7 +177,7 @@ describe('SessionGoalStore creation', () => {
 
     // markComplete emits a `completion` change (with stats), then clears the
     // durable record (a final null update), so the goal box disappears.
-    await store.markComplete({ reason: 'done', actor: 'evaluator' });
+    await store.markComplete({ reason: 'done', actor: 'model' });
     const completion = changes().find((c) => c?.kind === 'completion');
     expect(completion).toMatchObject({ kind: 'completion', status: 'complete', reason: 'done' });
     expect(completion?.stats).toMatchObject({ turnsUsed: 1 });
@@ -407,7 +403,7 @@ describe('SessionGoalStore lifecycle', () => {
     expect((await store.resumeGoal()).status).toBe('active');
   });
 
-  it('resumeGoal is a fresh attempt: clears the stop reason and resets stuck/failure streaks', async () => {
+  it('resumeGoal is a fresh attempt: clears the stop reason', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
     await store.markBlocked({ reason: 'need creds' });
@@ -415,9 +411,6 @@ describe('SessionGoalStore lifecycle', () => {
     const resumed = await store.resumeGoal();
     expect(resumed.status).toBe('active');
     expect(resumed.terminalReason).toBeUndefined();
-    // Streak counters are reset so the goal gets a full fresh run.
-    expect(resumed.consecutiveNoProgressTurns).toBe(0);
-    expect(resumed.consecutiveFailureTurns).toBe(0);
   });
 
   it('markComplete and markBlocked no-op for non-active goals', async () => {

@@ -577,7 +577,8 @@ export class SessionEventHandler {
       return;
     }
 
-    // Lifecycle / no-progress -> a low-profile, ctrl+o-expandable marker.
+    // Lifecycle change (pause / resume / blocked) -> a low-profile,
+    // ctrl+o-expandable marker.
     const marker = buildGoalMarker(change, state.theme.colors, state.toolOutputExpanded);
     if (marker !== null) {
       state.transcriptContainer.addChild(marker);

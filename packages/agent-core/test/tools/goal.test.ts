@@ -127,12 +127,13 @@ describe('GetGoalTool', () => {
 });
 
 describe('UpdateGoalTool', () => {
-  // The complete path appends a completion message, so the agent needs a context.
+  // The complete path appends the completion line as a system reminder, so the
+  // agent needs a context exposing appendSystemReminder.
   function agentWithContext(store: SessionGoalStore): Agent {
     return {
       type: 'main',
       goals: store,
-      context: { appendMessage: () => {} },
+      context: { appendSystemReminder: () => {} },
     } as unknown as Agent;
   }
 

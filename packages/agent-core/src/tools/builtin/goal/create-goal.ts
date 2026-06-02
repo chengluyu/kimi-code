@@ -18,8 +18,6 @@ const BudgetLimitsSchema = z
     tokenBudget: z.number().int().positive().optional(),
     turnBudget: z.number().int().positive().optional(),
     wallClockBudgetMs: z.number().int().positive().optional(),
-    noProgressTurnLimit: z.number().int().positive().optional(),
-    failureTurnLimit: z.number().int().positive().optional(),
   })
   .strict();
 

@@ -128,8 +128,6 @@ function goalSnapshot(overrides: Partial<GoalSnapshot> = {}): GoalSnapshot {
     startedBy: "user",
     updatedBy: "user",
     turnsUsed: 2,
-    consecutiveNoProgressTurns: 0,
-    consecutiveFailureTurns: 0,
     tokensUsed: 100,
     wallClockMs: 1000,
     budget: {
@@ -142,8 +140,6 @@ function goalSnapshot(overrides: Partial<GoalSnapshot> = {}): GoalSnapshot {
       tokenBudgetReached: false,
       turnBudgetReached: false,
       wallClockBudgetReached: false,
-      noProgressTurnLimit: null,
-      failureTurnLimit: null,
       overBudget: false,
     },
     ...overrides,

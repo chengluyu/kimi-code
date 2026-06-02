@@ -19,8 +19,8 @@ export interface HeadlessGoalCreate {
 /**
  * Exit codes by final goal status. The lifecycle has only one success outcome
  * (`complete` → 0) and two resumable stopped states: `blocked` (the system
- * stopped pursuing — incl. budgets, no-progress, errors) and `paused` (a turn
- * abort / SIGINT). Both are non-zero — the goal did not complete. An absent goal
+ * stopped pursuing — the model's UpdateGoal, a budget, or an error) and `paused`
+ * (a turn abort / SIGINT). Both are non-zero — the goal did not complete. An absent goal
  * (should not happen on the create path) maps to success.
  */
 export const GOAL_EXIT_CODES = {

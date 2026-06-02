@@ -16,25 +16,6 @@ export interface GoalAuditSink {
  * slash command, model tools, and goal continuation driver depend on.
  */
 
-/**
- * Default malfunction guard: stop a goal after this many *consecutive evaluator
- * failures* (invalid JSON / judge errors). This is not a work cap — it only
- * protects against a broken evaluator looping forever. Work limits (turns,
- * tokens, time) have no defaults; an unbounded goal runs until the evaluator
- * judges it terminal, and any stop-clause lives in the objective.
- */
-export const DEFAULT_GOAL_FAILURE_TURN_LIMIT = 3;
-
-/**
- * Default no-progress guard: block a goal after this many *consecutive
- * evaluator `no_progress` verdicts*. Unlike work caps (turns/tokens/time, which
- * have no defaults), this one defaults on so an unclear or unachievable
- * objective (e.g. "prove me wrong", "1 + 1 = 3") cannot spin forever — it lands
- * in `blocked` after a few stuck turns and waits for the user to resume or
- * refine it. Matches Codex's "blocked after three turns" behavior.
- */
-export const DEFAULT_GOAL_NO_PROGRESS_TURN_LIMIT = 3;
-
 /** Maximum objective length in characters. */
 export const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
 
@@ -101,14 +82,12 @@ export type GoalStatus =
   | 'complete';
 
 /** Who performed a goal action. `cleared` is an audit action, not a status. */
-export type GoalActor = 'user' | 'model' | 'evaluator' | 'continuation' | 'runtime' | 'system';
+export type GoalActor = 'user' | 'model' | 'runtime' | 'system';
 
 export interface GoalBudgetLimits {
   readonly tokenBudget?: number;
   readonly turnBudget?: number;
   readonly wallClockBudgetMs?: number;
-  readonly noProgressTurnLimit?: number;
-  readonly failureTurnLimit?: number;
 }
 
 /** A small piece of evidence attached to a model report or terminal outcome. */
@@ -129,8 +108,6 @@ export interface SessionGoalState {
   startedBy: GoalActor;
   updatedBy: GoalActor;
   turnsUsed: number;
-  consecutiveNoProgressTurns: number;
-  consecutiveFailureTurns: number;
   tokensUsed: number;
   /** Accumulated active-pursuit time from completed `active` intervals. */
   wallClockMs: number;
@@ -158,8 +135,6 @@ export interface GoalBudgetReport {
   readonly tokenBudgetReached: boolean;
   readonly turnBudgetReached: boolean;
   readonly wallClockBudgetReached: boolean;
-  readonly noProgressTurnLimit: number | null;
-  readonly failureTurnLimit: number | null;
   readonly overBudget: boolean;
 }
 
@@ -174,8 +149,6 @@ export interface GoalSnapshot {
   readonly startedBy: GoalActor;
   readonly updatedBy: GoalActor;
   readonly turnsUsed: number;
-  readonly consecutiveNoProgressTurns: number;
-  readonly consecutiveFailureTurns: number;
   readonly tokensUsed: number;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
@@ -416,12 +389,10 @@ export class SessionGoalStore {
       startedBy: actor,
       updatedBy: actor,
       turnsUsed: 0,
-      consecutiveNoProgressTurns: 0,
-      consecutiveFailureTurns: 0,
       tokensUsed: 0,
       wallClockMs: 0,
       wallClockResumedAt: this.nowMs(),
-      budgetLimits: this.normalizeBudgetLimits(input.budgetLimits),
+      budgetLimits: input.budgetLimits ?? {},
     };
     if (input.completionCriterion !== undefined && input.completionCriterion.trim().length > 0) {
       state.completionCriterion = input.completionCriterion.trim();
@@ -469,12 +440,9 @@ export class SessionGoalStore {
       );
     }
     const actor = input.actor ?? 'user';
-    // Resuming is a fresh attempt: clear the stop reason and reset the
-    // stuck/failure streaks so a goal that was `blocked` on the no-progress or
-    // evaluator-failure limit gets a full N turns again, not a single strike.
+    // Resuming is a fresh attempt: clear the stop reason so a re-activated goal
+    // starts clean.
     state.terminalReason = undefined;
-    state.consecutiveNoProgressTurns = 0;
-    state.consecutiveFailureTurns = 0;
     this.applyStatus(state, 'active', actor, input.reason);
     await this.persistState(state, {
       change: { kind: 'lifecycle', status: 'active', reason: input.reason },
@@ -542,7 +510,7 @@ export class SessionGoalStore {
   ): Promise<GoalSnapshot | null> {
     const state = this.options.readState();
     if (state === undefined || state.status !== 'active') return null;
-    const actor = input.actor ?? 'evaluator';
+    const actor = input.actor ?? 'model';
     this.applyStatus(state, 'complete', actor, input.reason);
     state.terminalReason = input.reason;
     if (input.evidence !== undefined) {
@@ -717,19 +685,6 @@ export class SessionGoalStore {
     };
   }
 
-  private normalizeBudgetLimits(input?: GoalBudgetLimits): GoalBudgetLimits {
-    // No default *work* caps (turns / tokens / time): an unbounded goal runs
-    // until the evaluator judges it complete. Two guards default on, though, so
-    // an unclear/unachievable goal cannot spin forever: the no-progress limit
-    // (blocks after N stuck turns) and the evaluator malfunction limit.
-    const limits: GoalBudgetLimits = {
-      ...input,
-      noProgressTurnLimit: input?.noProgressTurnLimit ?? DEFAULT_GOAL_NO_PROGRESS_TURN_LIMIT,
-      failureTurnLimit: input?.failureTurnLimit ?? DEFAULT_GOAL_FAILURE_TURN_LIMIT,
-    };
-    return limits;
-  }
-
   private toSnapshot(state: SessionGoalState): GoalSnapshot {
     return {
       goalId: state.goalId,
@@ -741,8 +696,6 @@ export class SessionGoalStore {
       startedBy: state.startedBy,
       updatedBy: state.updatedBy,
       turnsUsed: state.turnsUsed,
-      consecutiveNoProgressTurns: state.consecutiveNoProgressTurns,
-      consecutiveFailureTurns: state.consecutiveFailureTurns,
       tokensUsed: state.tokensUsed,
       wallClockMs: liveWallClockMs(state, this.nowMs()),
       budget: computeBudgetReport(state, this.nowMs()),
@@ -816,8 +769,6 @@ export function computeBudgetReport(
     tokenBudgetReached,
     turnBudgetReached,
     wallClockBudgetReached,
-    noProgressTurnLimit: limits.noProgressTurnLimit ?? null,
-    failureTurnLimit: limits.failureTurnLimit ?? null,
     overBudget: tokenBudgetReached || turnBudgetReached || wallClockBudgetReached,
   };
 }

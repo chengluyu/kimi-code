@@ -25,8 +25,6 @@ function fakeSnapshot() {
     startedBy: 'user' as const,
     updatedBy: 'user' as const,
     turnsUsed: 0,
-    consecutiveNoProgressTurns: 0,
-    consecutiveFailureTurns: 0,
     tokensUsed: 0,
     wallClockMs: 0,
     budget: {
@@ -39,8 +37,6 @@ function fakeSnapshot() {
       tokenBudgetReached: false,
       turnBudgetReached: false,
       wallClockBudgetReached: false,
-      noProgressTurnLimit: null,
-      failureTurnLimit: null,
       overBudget: false,
     },
   };

@@ -194,7 +194,7 @@ describe('goal session end-to-end', () => {
     const { session } = await setupSession(sessionDir, events, ['GetGoal']);
     await new SessionAPIImpl(session).createGoal({ objective: 'work' });
     await session.goals.markBlocked({
-      actor: 'evaluator',
+      actor: 'runtime',
       reason: 'needs credentials',
       evidence: [{ summary: 'auth step failed' }],
     });
