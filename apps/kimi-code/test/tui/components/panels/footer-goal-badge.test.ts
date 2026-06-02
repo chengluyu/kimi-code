@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FooterComponent } from '#/tui/components/chrome/footer';
 import { darkColors } from '#/tui/theme/colors';
@@ -52,6 +52,10 @@ function goal(overrides: Partial<GoalSnapshot> = {}): GoalSnapshot {
 }
 
 describe('FooterComponent — goal badge', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('omits the badge when there is no goal', () => {
     const footer = new FooterComponent(baseState({ goal: null }), darkColors);
     expect(strip(footer.render(160)[0]!)).not.toMatch(/goal/);
@@ -66,6 +70,30 @@ describe('FooterComponent — goal badge', () => {
     expect(out).toContain('7 turns');
     // No N/M when no turn budget is set.
     expect(out).not.toMatch(/\d+\/\d+ turns/);
+  });
+
+  it('keeps counting elapsed time for an active goal between snapshots', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    const footer = new FooterComponent(
+      baseState({ goal: goal({ wallClockMs: 0, turnsUsed: 0 }) }),
+      darkColors,
+    );
+
+    expect(strip(footer.render(160)[0]!)).toContain('0s');
+    vi.setSystemTime(2_500);
+    expect(strip(footer.render(160)[0]!)).toContain('3s');
+  });
+
+  it('requests a repaint while an active goal timer is visible', () => {
+    vi.useFakeTimers();
+    const onRefresh = vi.fn();
+
+    new FooterComponent(baseState({ goal: goal({ wallClockMs: 0 }) }), darkColors, onRefresh);
+
+    vi.advanceTimersByTime(1_000);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('shows used/limit turns only when a turn budget is set', () => {
