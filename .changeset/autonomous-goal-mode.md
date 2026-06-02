@@ -4,4 +4,4 @@
 "@moonshot-ai/kimi-code": minor
 ---
 
-Add goal mode so Kimi can pursue an objective across turns, show live progress, respect user-set limits, and pause cleanly when provider limits interrupt the run.
+Add experimental goal mode so Kimi can pursue an objective across turns, show live progress, respect user-set limits, and pause cleanly when provider limits interrupt the run.
