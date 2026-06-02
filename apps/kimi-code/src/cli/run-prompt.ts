@@ -452,6 +452,7 @@ function runPromptTurn(
         case 'compaction.cancelled':
         case 'compaction.completed':
         case 'compaction.started':
+        case 'cron.fired':
         case 'mcp.server.status':
         case 'session.meta.updated':
         case 'skill.activated':
@@ -461,6 +462,7 @@ function runPromptTurn(
         case 'tool.list.updated':
         case 'turn.started':
         case 'turn.step.completed':
+        case 'warning':
           return;
       }
     });
