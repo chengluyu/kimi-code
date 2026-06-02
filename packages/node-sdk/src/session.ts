@@ -273,8 +273,9 @@ export class Session {
 
   // --- Goal lifecycle ---------------------------------------------------
   // Deterministic user/host control surface. There is intentionally no
-  // `updateGoal`: the goal's terminal status is decided by the independent
-  // evaluator from the conversation, not reported by the model or the host.
+  // `updateGoal`: the goal's terminal status is decided by the model via the
+  // in-conversation UpdateGoal tool (or the goal driver on budget/error), not
+  // by the host.
 
   async createGoal(input: CreateGoalInput): Promise<GoalSnapshot> {
     this.ensureOpen();

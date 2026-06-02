@@ -1,7 +1,7 @@
 /**
  * GetGoalTool — returns the current goal snapshot (objective, status, budgets,
- * model-report state, and evaluator state) so the model can decide whether to
- * continue, report completion, report a blocker, or respect a pause.
+ * and usage counters) so the model can decide whether to continue, report
+ * completion via UpdateGoal, report a blocker, or respect a pause.
  */
 
 import type { Agent } from '#/agent';

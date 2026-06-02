@@ -140,9 +140,10 @@ export async function runPrompt(
     });
 
     const outputFormat = opts.outputFormat ?? 'text';
-    // Headless goal mode: `kimi -p "/goal <objective>"`. The continuation loop
-    // runs inside one turn, so the normal prompt-turn waiter blocks until the
-    // goal is terminal; we then emit a summary and set a distinct exit code.
+    // Headless goal mode: `kimi -p "/goal <objective>"`. The goal driver keeps
+    // the turn-run alive across continuation turns, so the normal prompt-turn
+    // waiter blocks until the goal is terminal; we then emit a summary and set a
+    // distinct exit code.
     const flagMap = await harness.getExperimentalFlags();
     const goalCreate = parseHeadlessGoalCreate(opts.prompt!, flagMap['goal-command'] === true);
     if (goalCreate !== undefined) {

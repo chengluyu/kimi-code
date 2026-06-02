@@ -2,13 +2,15 @@ import type { GoalSnapshot } from '../../session/goal';
 import { DynamicInjector } from './injector';
 
 /**
- * Injects the current goal into the main agent's context before each model
- * step. The objective is treated as user-provided task data wrapped in
+ * Injects the current goal into the main agent's context once per turn, at the
+ * continuation boundary (see `InjectionManager.injectGoal`), not per model step.
+ * The objective is treated as user-provided task data wrapped in
  * `<untrusted_objective>` — it describes the work but does not override
  * higher-priority instructions (system/developer messages, tool schemas,
  * permission rules, host controls).
  *
- * This injector never enforces budgets; Phase 4c owns hard continuation stops.
+ * This injector never enforces budgets; the goal driver (`TurnFlow.driveGoal`)
+ * owns hard continuation stops.
  */
 export class GoalInjector extends DynamicInjector {
   protected override readonly injectionVariant = 'goal';
@@ -19,7 +21,7 @@ export class GoalInjector extends DynamicInjector {
     const goal = store.getGoal().goal;
     if (goal === null) return undefined;
     // Three intensity levels by status:
-    // - `active`: full reminder + budget guidance; the continuation loop is driving.
+    // - `active`: full reminder + budget guidance; the goal driver is running turns.
     // - `blocked`: a light, non-demanding note so the model stays aware of the
     //   (possibly just-edited) goal and can help unstick it if the user asks.
     // - `paused`: silent. Pausing is the user deliberately setting the goal aside
@@ -130,10 +132,10 @@ function maxBudgetFraction(goal: GoalSnapshot): number {
 
 function budgetBandGuidance(goal: GoalSnapshot): string {
   const fraction = maxBudgetFraction(goal);
-  // No separate over-budget band: the runtime auto-blocks the goal when a hard
-  // budget is reached (before the evaluator runs), so an "over budget, report a
-  // terminal state" instruction would never be acted on. We only nudge the model
-  // to converge as it nears a budget.
+  // No separate over-budget band: the goal driver auto-blocks the goal when a
+  // hard budget is reached (before the next continuation turn), so an "over
+  // budget, report a terminal state" instruction would never be acted on. We
+  // only nudge the model to converge as it nears a budget.
   if (fraction >= 0.75) {
     return 'Budget guidance: you are nearing a budget. Converge on the objective and avoid starting new discretionary work.';
   }

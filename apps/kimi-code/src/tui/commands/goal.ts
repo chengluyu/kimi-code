@@ -33,7 +33,8 @@ const CONTROL_SUBCOMMANDS = new Set(['pause', 'resume', 'cancel']);
  * token; use `/goal -- <objective>` to start a goal whose text begins with one
  * of those words. (`cancel` is the single discard action — it removes the
  * current goal.) Stop conditions are expressed in the objective in natural
- * language (e.g. "…or stop after 20 turns"); the evaluator honors them.
+ * language (e.g. "…or stop after 20 turns"); the model honors them when it
+ * self-audits each turn and reports `complete`/`blocked` via UpdateGoal.
  */
 export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
   const args = rawArgs.trim();

@@ -5,10 +5,10 @@ import { parseGoalCommand } from '#/tui/commands/index';
 /**
  * Headless goal-mode support for the `kimi -p "/goal <objective>"` prompt path.
  *
- * The continuation loop runs inside a single main-agent turn, so the existing
- * prompt-turn waiter already blocks until the goal reaches a terminal state.
- * This module adds the create-on-entry parsing, a machine-readable summary, and
- * the terminal-status → exit-code mapping.
+ * The goal driver keeps the prompt's turn-run alive across continuation turns
+ * until the goal reaches a terminal state, so the existing prompt-turn waiter
+ * already blocks until then. This module adds the create-on-entry parsing, a
+ * machine-readable summary, and the terminal-status → exit-code mapping.
  */
 
 export interface HeadlessGoalCreate {

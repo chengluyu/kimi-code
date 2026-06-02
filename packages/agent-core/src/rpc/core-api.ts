@@ -264,7 +264,8 @@ export interface UpdateSessionMetadataPayload {
 
 // Goal lifecycle payloads and re-exported goal value types. These describe the
 // deterministic user/SDK control surface; the goal's terminal status is decided
-// by the independent evaluator, not reported by the model or set through this API.
+// by the model via the UpdateGoal tool (or the goal driver on budget/error),
+// not set through this API.
 export type {
   CreateGoalInput,
   GoalBudgetLimits,

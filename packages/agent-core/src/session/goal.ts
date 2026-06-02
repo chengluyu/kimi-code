@@ -13,7 +13,7 @@ export interface GoalAuditSink {
  *
  * The store keeps exactly one current goal in `Session.metadata.custom.goal`.
  * It owns the lifecycle rules, budget math, and actor boundaries that the
- * slash command, model tools, continuation loop, and evaluator depend on.
+ * slash command, model tools, and goal continuation driver depend on.
  */
 
 /**
@@ -46,28 +46,28 @@ export const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
  *
  * | Status     | Persisted | Resumable | Set by                          | Meaning                                          |
  * |------------|-----------|-----------|---------------------------------|--------------------------------------------------|
- * | `active`   | yes       | (running) | createGoal / resumeGoal         | The continuation loop may drive work.            |
+ * | `active`   | yes       | (running) | createGoal / resumeGoal         | The goal driver may run continuation turns.      |
  * | `paused`   | yes       | yes       | pauseGoal / pauseOnInterrupt /  | User (or interrupt) stopped it; intact.          |
  * |            |           |           | normalizeMetadata               |                                                  |
  * | `blocked`  | yes       | yes       | markBlocked                     | The system stopped it for some `reason`.         |
  * | `complete` | no        | —         | markComplete                    | Success — announced in a message, then cleared.  |
  *
- * Only an `active` goal advances: accounting, evaluator runs, and continuation
- * all gate on `status === 'active'`. `paused` and `blocked` are the same kind of
- * thing — "the loop is not driving, but the goal is intact and resumable via
- * `/goal resume`" — differing only in *who* stopped it (the user vs the system)
- * and the human-readable `reason`. There is no separate `impossible`,
- * `budget_limited`, `error`, or `cancelled` status: an unachievable goal, an
- * exhausted budget, a runtime/evaluator failure all become `blocked(+reason)`,
+ * Only an `active` goal advances: accounting and continuation turns all gate on
+ * `status === 'active'`. `paused` and `blocked` are the same kind of
+ * thing — "the driver is not running continuation turns, but the goal is intact
+ * and resumable via `/goal resume`" — differing only in *who* stopped it (the
+ * user vs the system) and the human-readable `reason`. There is no separate
+ * `impossible`, `budget_limited`, `error`, or `cancelled` status: an unachievable
+ * goal, an exhausted budget, a runtime failure all become `blocked(+reason)`,
  * and `cancelGoal` discards the record entirely. See {@link SessionGoalStore}
  * for the setters and the per-status notes below.
  */
 export type GoalStatus =
   /**
-   * The goal is live and the continuation loop may drive work toward it. Set on
-   * creation (`createGoal`) and when a paused/blocked goal is resumed
+   * The goal is live and the goal driver may run continuation turns toward it.
+   * Set on creation (`createGoal`) and when a paused/blocked goal is resumed
    * (`resumeGoal`). The only status under which turns/tokens/wall-clock are
-   * accounted and the evaluator runs.
+   * accounted and continuation turns run.
    */
   | 'active'
   /**
@@ -80,19 +80,20 @@ export type GoalStatus =
   | 'paused'
   /**
    * The *system* stopped pursuing the goal, for a reason carried in
-   * `terminalReason`: the evaluator judged it cannot proceed (an external
-   * blocker, or an objective it deems unachievable); no progress was made for
-   * `noProgressTurnLimit` consecutive turns; a configured hard budget
-   * (token/turn/time/step) was reached; or a runtime/evaluator failure occurred.
-   * Set by `markBlocked` (from the continuation controller and the turn catch).
+   * `terminalReason`: the model reported it cannot proceed via
+   * `UpdateGoal('blocked')` (an external blocker, or an objective it deems
+   * unachievable); a configured hard budget (token/turn/time) was reached; or a
+   * runtime failure occurred. Set by `markBlocked` (from the model's
+   * `UpdateGoal`, the budget check in the goal driver, and the driver's
+   * turn-failure catch).
    * Resumable like `paused` — `/goal resume` re-activates it; a plain message
    * just runs one normal turn without reactivating the loop. Editing the goal
    * while blocked takes effect on the next turn.
    */
   | 'blocked'
   /**
-   * Success: the independent evaluator judged the objective met. Set by
-   * `markComplete` from the continuation controller. This status is **transient**
+   * Success: the model reported the objective met via `UpdateGoal('complete')`.
+   * Set by `markComplete`. This status is **transient**
    * — `markComplete` emits the completion, appends a completion message, and then
    * clears the durable record, so the goal box disappears and `complete` never
    * rests on disk (like the old `cancelled` pattern, but with an announcement).
@@ -110,7 +111,7 @@ export interface GoalBudgetLimits {
   readonly failureTurnLimit?: number;
 }
 
-/** A small piece of evidence attached to a model report or evaluator verdict. */
+/** A small piece of evidence attached to a model report or terminal outcome. */
 export interface GoalEvidence {
   readonly summary: string;
   readonly detail?: string;
@@ -500,10 +501,10 @@ export class SessionGoalStore {
   // --- Terminal outcomes (system-decided) -------------------------------
 
   /**
-   * Marks the goal `blocked`: the system stopped pursuing it for `reason` — an
-   * evaluator `blocked` verdict (incl. objectives it deems unachievable), the
-   * no-progress limit, a hard budget, a `maxStepsPerTurn` cap, or a
-   * runtime/evaluator failure. `blocked` is persisted and **resumable** via
+   * Marks the goal `blocked`: the system stopped pursuing it for `reason` — the
+   * model's `UpdateGoal('blocked')` (incl. objectives it deems unachievable), a
+   * hard budget reached by the goal driver, or a runtime failure in the driver.
+   * `blocked` is persisted and **resumable** via
    * `/goal resume` (it is a sibling of `paused`, not a dead end), so it emits a
    * `lifecycle` change. No-ops for a goal that is missing or not active, so a
    * user pause / clear is never overwritten.
@@ -531,7 +532,7 @@ export class SessionGoalStore {
    * Records goal success, then clears the durable record. `complete` is
    * transient: this emits a terminal `complete` change carrying the final stats
    * (so the UI/caller can render the outcome) WITHOUT writing `complete` to disk,
-   * then clears the goal so the box disappears. The continuation controller is
+   * then clears the goal so the box disappears. The `UpdateGoal` tool is
    * responsible for the user-facing completion message. Returns the final
    * snapshot (status `complete`) so the caller can build that message. No-ops for
    * a goal that is missing or not active.
