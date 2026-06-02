@@ -115,9 +115,11 @@ export function buildGoalReportLines(options: GoalReportOptions): string[] {
   const bar = chalk.hex(statusHex(goal.status, colors));
   // `complete` is the terminal outcome (the completion card); everything else
   // (active / paused / blocked) is a persisted, resumable goal that still shows
-  // its stop condition. A reason is worth surfacing for blocked / complete.
+  // its stop condition. A reason is worth surfacing for stopped / complete states.
   const isComplete = goal.status === 'complete';
-  const showReason = goal.status === 'blocked' || isComplete;
+  const reason = goal.terminalReason;
+  const showReason =
+    (goal.status === 'paused' && reason !== undefined) || goal.status === 'blocked' || isComplete;
   const lines: string[] = [];
 
   // Condition as a blockquote left-trail.
@@ -134,7 +136,6 @@ export function buildGoalReportLines(options: GoalReportOptions): string[] {
   const row = (label: string, val: string): string => `${muted(label.padEnd(LABEL_WIDTH))}${val}`;
 
   if (showReason) {
-    const reason = goal.terminalReason;
     lines.push(
       row(
         'Status',

@@ -60,6 +60,7 @@ const LLM_NOT_SET_MESSAGE = 'LLM not set, send "/login" to login';
 
 /** Origin tag for the synthetic "continue" prompt that drives each goal turn. */
 const GOAL_CONTINUATION_ORIGIN: PromptOrigin = { kind: 'system_trigger', name: 'goal_continuation' };
+const GOAL_RATE_LIMIT_PAUSE_REASON = 'Paused after provider rate limit';
 
 /**
  * The prompt the goal driver appends to start each continuation turn — the
@@ -296,8 +297,9 @@ export class TurnFlow {
    * full turn, then reads the goal status the model set via `UpdateGoal`:
    * `complete` (the record is cleared) / `blocked` / `paused` stop the loop;
    * `active` (the model didn't decide) re-injects the goal reminder and runs the
-   * next continuation turn. An aborted turn pauses the goal; a failed turn blocks
-   * it (both resumable). Returns the final turn's result.
+   * next continuation turn. An aborted turn pauses the goal; a provider rate
+   * limit also pauses it. Other failed turns block it (all resumable). Returns
+   * the final turn's result.
    */
   private async driveGoal(
     firstTurnId: number,
@@ -321,6 +323,11 @@ export class TurnFlow {
         return end;
       }
       if (end.event.reason === 'failed') {
+        const pauseReason = goalFailurePauseReason(end.event.error);
+        if (pauseReason !== null) {
+          await this.agent.goals?.pauseActiveGoal({ actor: 'runtime', reason: pauseReason });
+          return end;
+        }
         await this.agent.goals?.markBlocked({
           reason: `Runtime error: ${end.event.error?.message ?? 'unknown'}`,
         });
@@ -871,6 +878,11 @@ function summarizeTurnError(error: unknown, turnId: number): KimiErrorPayload {
   }
 
   return { ...payload, details };
+}
+
+function goalFailurePauseReason(error: KimiErrorPayload | undefined): string | null {
+  if (error?.code === ErrorCodes.PROVIDER_RATE_LIMIT) return GOAL_RATE_LIMIT_PAUSE_REASON;
+  return null;
 }
 
 function toolInputRecord(args: unknown): Record<string, unknown> {

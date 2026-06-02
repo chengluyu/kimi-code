@@ -80,6 +80,12 @@ describe('buildGoalReportLines', () => {
     expect(out).not.toMatch(/^Stop/m);
   });
 
+  it('shows the reason for a paused goal when one exists', () => {
+    const out = lines(goal({ status: 'paused', terminalReason: 'Paused after provider rate limit' }));
+    expect(out).toContain('Status');
+    expect(out).toContain('paused — Paused after provider rate limit');
+  });
+
   it('titles the box with the status', () => {
     expect(goalPanelTitle(goal())).toBe(' Goal · active ');
     expect(goalPanelTitle(goal({ status: 'complete' }))).toBe(' Goal · complete ');

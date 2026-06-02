@@ -371,11 +371,15 @@ describe('SessionGoalStore accounting', () => {
 });
 
 describe('SessionGoalStore lifecycle', () => {
-  it('pauseGoal and resumeGoal update status', async () => {
+  it('pauseGoal and resumeGoal update status and reason', async () => {
     const { store } = makeStore();
     await store.createGoal({ objective: 'work' });
-    expect((await store.pauseGoal()).status).toBe('paused');
-    expect((await store.resumeGoal()).status).toBe('active');
+    const paused = await store.pauseGoal({ reason: 'taking a break' });
+    expect(paused.status).toBe('paused');
+    expect(paused.terminalReason).toBe('taking a break');
+    const resumed = await store.resumeGoal();
+    expect(resumed.status).toBe('active');
+    expect(resumed.terminalReason).toBeUndefined();
   });
 
   it('markComplete returns a complete snapshot with reason, then clears', async () => {
@@ -423,6 +427,7 @@ describe('SessionGoalStore lifecycle', () => {
     await store.createGoal({ objective: 'work' });
     const snap = await store.pauseOnInterrupt({ reason: 'Paused after interruption' });
     expect(snap?.status).toBe('paused');
+    expect(snap?.terminalReason).toBe('Paused after interruption');
     // Emits a lifecycle change so the transcript marker / footer badge update.
     expect(changes().at(-1)).toMatchObject({ kind: 'lifecycle', status: 'paused' });
     // The goal stays resumable rather than dead-ending in a terminal state.

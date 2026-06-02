@@ -66,6 +66,14 @@ describe('GoalInjector content', () => {
     expect(text).toContain('UpdateGoal with `active`');
   });
 
+  it('includes the reason for a paused goal when one exists', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'work' });
+    await store.pauseGoal({ reason: 'Paused after provider rate limit' });
+    const text = (await injectOnce(store))!;
+    expect(text).toContain('currently paused (Paused after provider rate limit)');
+  });
+
   it('produces a light note (with reason) for a blocked goal', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });

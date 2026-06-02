@@ -2,10 +2,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
-import type { ProviderConfig } from '@moonshot-ai/kosong';
+import { APIStatusError, type ProviderConfig } from '@moonshot-ai/kosong';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderManager } from '../../src/session/provider-manager';
+import type { AgentOptions } from '../../src/agent';
 import type { ResolvedAgentProfile } from '../../src/profile';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { Session } from '../../src/session';
@@ -68,7 +69,12 @@ function createSessionRpc(events: Array<Record<string, unknown>>): SDKSessionRPC
   } as unknown as SDKSessionRPC;
 }
 
-async function setupSession(sessionDir: string, events: Array<Record<string, unknown>>, tools: readonly string[]) {
+async function setupSession(
+  sessionDir: string,
+  events: Array<Record<string, unknown>>,
+  tools: readonly string[],
+  generate?: NonNullable<AgentOptions['generate']>,
+) {
   const scripted = createScriptedGenerate();
   const session = track(
     new Session({
@@ -80,7 +86,7 @@ async function setupSession(sessionDir: string, events: Array<Record<string, unk
       providerManager: testProviderManager(),
     }),
   );
-  const { agent } = await session.createAgent({ type: 'main', generate: scripted.generate }, goalProfile(tools));
+  const { agent } = await session.createAgent({ type: 'main', generate: generate ?? scripted.generate }, goalProfile(tools));
   agent.config.update({ modelAlias: 'mock-model', thinkingLevel: 'off' });
   agent.permission.setMode('yolo');
   return { session, agent, scripted };
@@ -197,6 +203,23 @@ describe('goal session end-to-end', () => {
     expect(JSON.stringify(scripted.calls[0]?.history ?? [])).toContain('currently paused');
     expect(JSON.stringify(scripted.calls[2]?.history ?? [])).toContain('Continue working toward the active goal');
     expect(api.getGoal({}).goal).toBeNull();
+  });
+
+  it('pauses the goal on provider rate limits', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent } = await setupSession(sessionDir, events, ['GetGoal'], async () => {
+      throw new APIStatusError(429, 'Rate limited', 'req-429');
+    });
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ objective: 'work' });
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = api.getGoal({}).goal;
+    expect(goal?.status).toBe('paused');
+    expect(goal?.terminalReason).toBe('Paused after provider rate limit');
   });
 
   it('preserves terminal status and demotes active goals across resume', async () => {

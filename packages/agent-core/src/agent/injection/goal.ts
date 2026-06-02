@@ -68,8 +68,12 @@ function buildBlockedNote(goal: GoalSnapshot): string {
  * explicit lifecycle action to take when the user asks to continue the goal.
  */
 function buildPausedNote(goal: GoalSnapshot): string {
+  const reason = goal.terminalReason;
   const lines: string[] = [];
-  lines.push('There is a goal, currently paused. It is not being pursued autonomously right now.');
+  lines.push(
+    `There is a goal, currently paused${reason ? ` (${reason})` : ''}. It is not being ` +
+      'pursued autonomously right now.',
+  );
   lines.push('');
   lines.push(`<untrusted_objective>\n${goal.objective}\n</untrusted_objective>`);
   if (goal.completionCriterion !== undefined) {

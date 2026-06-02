@@ -28,7 +28,8 @@ export const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
  * | Status     | Persisted | Resumable | Set by                          | Meaning                                          |
  * |------------|-----------|-----------|---------------------------------|--------------------------------------------------|
  * | `active`   | yes       | (running) | createGoal / resumeGoal         | The goal driver may run continuation turns.      |
- * | `paused`   | yes       | yes       | pauseGoal / pauseOnInterrupt /  | User (or interrupt) stopped it; intact.          |
+ * | `paused`   | yes       | yes       | pauseGoal / pauseActiveGoal /   | User, interrupt, resume, or retryable runtime    |
+ * |            |           |           | pauseOnInterrupt /              | stop parked it; intact.                          |
  * |            |           |           | normalizeMetadata               |                                                  |
  * | `blocked`  | yes       | yes       | markBlocked                     | The system stopped it for some `reason`.         |
  * | `complete` | no        | —         | markComplete                    | Success — announced in a message, then cleared.  |
@@ -38,8 +39,9 @@ export const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
  * thing — "the driver is not running continuation turns, but the goal is intact
  * and resumable via `/goal resume`" — differing only in *who* stopped it (the
  * user vs the system) and the human-readable `reason`. There is no separate
- * `impossible`, `budget_limited`, `error`, or `cancelled` status: an unachievable
- * goal, an exhausted budget, a runtime failure all become `blocked(+reason)`,
+ * `impossible`, `budget_limited`, `error`, or `cancelled` status: an
+ * unachievable goal, an exhausted budget, or a non-retryable runtime failure
+ * becomes `blocked(+reason)`, retryable runtime stops become `paused(+reason)`,
  * and `cancelGoal` discards the record entirely. See {@link SessionGoalStore}
  * for the setters and the per-status notes below.
  */
@@ -56,7 +58,8 @@ export type GoalStatus =
    * `/goal resume`. Reached three ways: the user pauses (`pauseGoal`); a live
    * turn is aborted mid-flight, e.g. Esc/shutdown (`pauseOnInterrupt`); or a
    * session is resumed from disk, where an `active` goal cannot still be running
-   * and is demoted (`normalizeMetadata`).
+   * and is demoted (`normalizeMetadata`); or a retryable runtime stop such as a
+   * provider rate limit parked it via `pauseActiveGoal`.
    */
   | 'paused'
   /**
@@ -64,8 +67,8 @@ export type GoalStatus =
    * `terminalReason`: the model reported it cannot proceed via
    * `UpdateGoal('blocked')` (an external blocker, or an objective it deems
    * unachievable); a configured hard budget (token/turn/time) was reached; or a
-   * runtime failure occurred. Set by `markBlocked` (from the model's
-   * `UpdateGoal`, the budget check in the goal driver, and the driver's
+   * non-retryable runtime failure occurred. Set by `markBlocked` (from the
+   * model's `UpdateGoal`, the budget check in the goal driver, and the driver's
    * turn-failure catch).
    * Resumable like `paused` — `/goal resume` re-activates it; a plain message
    * just runs one normal turn without reactivating the loop. Editing the goal
@@ -112,6 +115,7 @@ export interface SessionGoalState {
    */
   wallClockResumedAt?: number;
   budgetLimits: GoalBudgetLimits;
+  /** Human-readable reason for a stopped or completed goal. */
   terminalReason?: string;
 }
 
@@ -411,6 +415,27 @@ export class SessionGoalStore {
     }
     const actor = input.actor ?? 'user';
     this.applyStatus(state, 'paused', actor, input.reason);
+    state.terminalReason = input.reason;
+    await this.persistState(state, {
+      change: { kind: 'lifecycle', status: 'paused', reason: input.reason },
+    });
+    this.appendStatusUpdate(state, actor, input.reason);
+    return this.toSnapshot(state);
+  }
+
+  /**
+   * Parks the current active goal without throwing if it already stopped. Runtime
+   * paths use this after a turn has ended, where the user may already have
+   * paused, cleared, or otherwise changed the goal.
+   */
+  async pauseActiveGoal(
+    input: { actor?: GoalActor; reason?: string } = {},
+  ): Promise<GoalSnapshot | null> {
+    const state = this.options.readState();
+    if (state === undefined || state.status !== 'active') return null;
+    const actor = input.actor ?? 'runtime';
+    this.applyStatus(state, 'paused', actor, input.reason);
+    state.terminalReason = input.reason;
     await this.persistState(state, {
       change: { kind: 'lifecycle', status: 'paused', reason: input.reason },
     });
@@ -535,14 +560,7 @@ export class SessionGoalStore {
    * already-stopped goal is never overwritten.
    */
   async pauseOnInterrupt(input: { reason?: string } = {}): Promise<GoalSnapshot | null> {
-    const state = this.options.readState();
-    if (state === undefined || state.status !== 'active') return null;
-    this.applyStatus(state, 'paused', 'user', input.reason);
-    await this.persistState(state, {
-      change: { kind: 'lifecycle', status: 'paused', reason: input.reason },
-    });
-    this.appendStatusUpdate(state, 'user', input.reason);
-    return this.toSnapshot(state);
+    return this.pauseActiveGoal({ actor: 'user', reason: input.reason });
   }
 
   // --- Accounting & reporting -------------------------------------------
