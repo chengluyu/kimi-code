@@ -14,9 +14,12 @@
  */
 
 import type { Component } from '@earendil-works/pi-tui';
+import { Text, visibleWidth } from '@earendil-works/pi-tui';
 import type { GoalSnapshot, GoalStatus } from '@moonshot-ai/kimi-code-sdk';
 import chalk from 'chalk';
 
+import { MESSAGE_INDENT } from '#/tui/constant/rendering';
+import { STATUS_BULLET } from '#/tui/constant/symbols';
 import type { ColorPalette } from '#/tui/theme/colors';
 import { formatTokenCount } from '#/utils/usage/usage-format';
 
@@ -42,10 +45,47 @@ export class GoalSetMessageComponent implements Component {
 
   render(width: number): string[] {
     const wrapWidth = Math.max(20, Math.min(WRAP_WIDTH, width) - SET_INDENT.length);
-    const lines = ['', `${SET_INDENT}${chalk.hex(this.colors.textStrong)('Goal set')}`];
+    const lines = ['', `${SET_INDENT}${chalk.hex(this.colors.primary).bold('Goal set')}`];
     for (const line of wrap(this.objective, wrapWidth, MAX_OBJECTIVE_LINES)) {
-      lines.push(SET_INDENT + chalk.hex(this.colors.textDim)(line));
+      lines.push(SET_INDENT + chalk.hex(this.colors.text)(line));
     }
+    return lines;
+  }
+}
+
+export class GoalCompletionMessageComponent implements Component {
+  constructor(
+    private readonly message: string,
+    private readonly colors: ColorPalette,
+  ) {}
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    const [headline = '', ...details] = this.message.trim().split(/\r?\n/);
+    if (headline.length === 0) return [];
+
+    const bullet = chalk.hex(this.colors.success).bold(STATUS_BULLET);
+    const bulletWidth = visibleWidth(STATUS_BULLET);
+    const contentWidth = Math.max(1, width - bulletWidth);
+    const lines: string[] = [''];
+
+    const headlineText = new Text(chalk.hex(this.colors.success).bold(headline), 0, 0);
+    const headlineLines = headlineText.render(contentWidth);
+    for (let i = 0; i < headlineLines.length; i += 1) {
+      lines.push((i === 0 ? bullet : MESSAGE_INDENT) + headlineLines[i]);
+    }
+
+    const detailText = details.join('\n').trim();
+    if (detailText.length > 0) {
+      const detailLines = new Text(chalk.hex(this.colors.textDim)(detailText), 0, 0).render(
+        contentWidth,
+      );
+      for (const line of detailLines) {
+        lines.push(MESSAGE_INDENT + line);
+      }
+    }
+
     return lines;
   }
 }

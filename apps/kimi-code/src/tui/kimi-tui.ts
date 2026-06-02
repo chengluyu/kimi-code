@@ -69,6 +69,7 @@ import { FileMentionProvider } from './components/editor/file-mention-provider';
 import { AssistantMessageComponent } from './components/messages/assistant-message';
 import { BackgroundAgentStatusComponent } from './components/messages/background-agent-status';
 import { CronMessageComponent } from './components/messages/cron-message';
+import { GoalCompletionMessageComponent } from './components/messages/goal-panel';
 import { SkillActivationComponent } from './components/messages/skill-activation';
 import {
   NoticeMessageComponent,
@@ -1224,6 +1225,9 @@ export class KimiTUI {
           this.state.theme.colors,
         );
       case 'assistant': {
+        if (entry.content.trimStart().startsWith('✓ Goal complete')) {
+          return new GoalCompletionMessageComponent(entry.content, this.state.theme.colors);
+        }
         const component = new AssistantMessageComponent(
           this.state.theme.markdownTheme,
           this.state.theme.colors,

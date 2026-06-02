@@ -1,14 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import chalk from 'chalk';
 
 import {
   buildGoalReportLines,
+  GoalCompletionMessageComponent,
   GoalSetMessageComponent,
   goalPanelTitle,
 } from '#/tui/components/messages/goal-panel';
+import { STATUS_BULLET } from '#/tui/constant/symbols';
 import { darkColors } from '#/tui/theme/colors';
 import type { GoalSnapshot } from '@moonshot-ai/kimi-code-sdk';
 
-const ANSI_SGR = /\[[0-9;]*m/g;
+const previousChalkLevel = chalk.level;
+beforeAll(() => {
+  chalk.level = 3;
+});
+afterAll(() => {
+  chalk.level = previousChalkLevel;
+});
+
+const ANSI_SGR = /\u001B\[[0-9;]*m/g;
 function strip(lines: string[]): string {
   return lines.join('\n').replaceAll(ANSI_SGR, '');
 }
@@ -94,5 +105,30 @@ describe('GoalSetMessageComponent', () => {
     for (const line of body) {
       expect(strip([line]).startsWith('  ')).toBe(true);
     }
+  });
+
+  it('renders the label in the primary accent and the objective as normal text', () => {
+    const rendered = new GoalSetMessageComponent('Fix three bugs one by one.', darkColors).render(
+      60,
+    );
+
+    expect(rendered[1]).toBe(`  ${chalk.hex(darkColors.primary).bold('Goal set')}`);
+    expect(rendered[2]).toBe(`  ${chalk.hex(darkColors.text)('Fix three bugs one by one.')}`);
+  });
+});
+
+describe('GoalCompletionMessageComponent', () => {
+  it('renders the completion headline in green and keeps the stats line indented', () => {
+    const message = '✓ Goal complete.\nWorked 1 turn over 2m28s, using 766.9k tokens.';
+    const rendered = new GoalCompletionMessageComponent(message, darkColors).render(80);
+
+    expect(rendered[0]).toBe('');
+    expect(rendered[1]?.trimEnd()).toBe(
+      chalk.hex(darkColors.success).bold(STATUS_BULLET) +
+        chalk.hex(darkColors.success).bold('✓ Goal complete.'),
+    );
+    expect(strip([rendered[2]!]).trimEnd()).toBe(
+      '  Worked 1 turn over 2m28s, using 766.9k tokens.',
+    );
   });
 });
