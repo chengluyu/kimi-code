@@ -91,7 +91,7 @@ const mocks = vi.hoisted(() => {
     setPermission: vi.fn(),
     setApprovalHandler: vi.fn(),
     setQuestionHandler: vi.fn(),
-    getStatus: vi.fn(async () => ({ permission: 'auto' })),
+    getStatus: vi.fn(async () => ({ permission: 'auto', model: 'k2' })),
     createGoal: vi.fn(async () => snapshot({ status: 'active' })),
     getGoal: vi.fn(async () => ({ goal: snapshot({ status: 'complete' }) })),
     onEvent: vi.fn((handler: (event: any) => void) => {
@@ -111,6 +111,7 @@ const mocks = vi.hoisted(() => {
     eventHandlers,
     mainEvent,
     experimentalFlags: { 'goal-command': true } as Record<string, boolean>,
+    sessions: [] as Array<{ readonly id: string; readonly workDir: string }>,
   };
 });
 
@@ -126,7 +127,7 @@ vi.mock('@moonshot-ai/kimi-code-sdk', async (importOriginal) => {
       getExperimentalFlags = vi.fn(async () => mocks.experimentalFlags);
       createSession = vi.fn(async () => mocks.session);
       resumeSession = vi.fn(async () => mocks.session);
-      listSessions = vi.fn(async () => []);
+      listSessions = vi.fn(async () => mocks.sessions);
       close = vi.fn();
       track = vi.fn();
       constructor() {}
@@ -169,7 +170,9 @@ describe('runPrompt headless goal mode', () => {
   beforeEach(() => {
     savedExitCode = process.exitCode;
     mocks.experimentalFlags = { 'goal-command': true };
+    mocks.sessions = [];
     mocks.session.createGoal.mockClear();
+    mocks.session.getStatus.mockResolvedValue({ permission: 'auto', model: 'k2' } as never);
     mocks.session.getGoal.mockResolvedValue({ goal: snapshot({ status: 'complete' }) } as never);
   });
 
@@ -246,5 +249,22 @@ describe('runPrompt headless goal mode', () => {
     });
     expect(mocks.session.createGoal).not.toHaveBeenCalled();
     expect(mocks.session.prompt).toHaveBeenCalled();
+  });
+
+  it('validates the resumed session model before creating a headless goal', async () => {
+    mocks.sessions = [{ id: 'ses_goal', workDir: process.cwd() }];
+    mocks.session.getStatus.mockResolvedValueOnce({ permission: 'auto', model: '' } as never);
+    const stdout = writer();
+    const stderr = writer();
+
+    await expect(
+      runPrompt(opts({ session: 'ses_goal' }), 'test', {
+        stdout,
+        stderr,
+        process: { once: () => {}, off: () => {}, exit: () => undefined as never },
+      }),
+    ).rejects.toThrow('No model configured');
+
+    expect(mocks.session.createGoal).not.toHaveBeenCalled();
   });
 });

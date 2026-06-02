@@ -130,9 +130,21 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return this.session.goals.resumeGoal({ actor: 'user', reason: payload.reason });
   }
 
-  cancelGoal(payload: GoalControlPayload) {
+  async cancelGoal(payload: GoalControlPayload) {
     this.assertGoalCommandEnabled();
-    return this.session.goals.cancelGoal({ actor: 'user', reason: payload.reason });
+    const snapshot = await this.session.goals.cancelGoal({
+      actor: 'user',
+      reason: payload.reason,
+    });
+    this.session.agents.get('main')?.context.appendSystemReminder(
+      [
+        'The user cancelled the current goal.',
+        'Ignore earlier active-goal reminders for that goal.',
+        'Handle the next user request normally unless the user starts or resumes a goal.',
+      ].join(' '),
+      { kind: 'system_trigger', name: 'goal_cancelled' },
+    );
+    return snapshot;
   }
 
   private assertGoalCommandEnabled(): void {

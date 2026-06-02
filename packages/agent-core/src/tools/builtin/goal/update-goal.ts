@@ -43,6 +43,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
 
     return {
       description: `Setting goal status: ${args.status}`,
+      stopBatchAfterThis: args.status !== 'active',
       approvalRule: this.name,
       execute: async () => {
         try {
@@ -63,14 +64,14 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 name: 'goal_completion',
               });
             }
-            return { output: 'Goal marked complete.' };
+            return { output: 'Goal marked complete.', stopTurn: true };
           }
           if (args.status === 'blocked') {
             await store.markBlocked({ actor: 'model' });
-            return { output: 'Goal marked blocked.' };
+            return { output: 'Goal marked blocked.', stopTurn: true };
           }
           await store.pauseGoal({ actor: 'model' });
-          return { output: 'Goal paused.' };
+          return { output: 'Goal paused.', stopTurn: true };
         } catch (error) {
           return goalErrorResult(error);
         }

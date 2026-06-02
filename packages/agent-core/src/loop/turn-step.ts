@@ -16,7 +16,13 @@ import type { LoopEventDispatcher } from './events';
 import type { LLM, LLMChatParams, LLMChatResponse } from './llm';
 import { chatWithRetry } from './retry';
 import { runToolCallBatch, type ToolCallStepContext } from './tool-call';
-import type { ExecutableTool, LoopHooks, LoopMessageBuilder, LoopStepStopReason } from './types';
+import type {
+  ExecutableTool,
+  LoopHooks,
+  LoopMessageBuilder,
+  LoopStepStopReason,
+  RecordStepUsageResult,
+} from './types';
 
 type ChatStreamingCallbacks = Pick<
   LLMChatParams,
@@ -34,7 +40,7 @@ export interface ExecuteLoopStepDeps {
   readonly log?: Logger | undefined;
   readonly currentStep: number;
   readonly maxRetryAttempts?: number;
-  readonly recordUsage: (usage: TokenUsage) => void | Promise<void>;
+  readonly recordUsage: (usage: TokenUsage) => RecordStepUsageResult | void | Promise<RecordStepUsageResult | void>;
 }
 
 export async function executeLoopStep(deps: ExecuteLoopStepDeps): Promise<{
@@ -115,15 +121,17 @@ export async function executeLoopStep(deps: ExecuteLoopStepDeps): Promise<{
     log,
   });
   const usage = response.usage;
-  await recordUsage(usage);
+  const usageResult = await recordUsage(usage);
+  const stopTurnAfterUsage = usageResult?.stopTurn === true;
   const stopReason = deriveStepStopReason(response);
 
   // Execute tools only when the normalized response shape represents a tool
   // step. Provider terminal diagnostics such as filtering or truncation must
   // not trigger side-effecting tool execution even if a malformed response also
   // contains tool calls.
-  let effectiveStopReason = stopReason;
-  if (stopReason === 'tool_use') {
+  let effectiveStopReason: LoopStepStopReason =
+    stopTurnAfterUsage && stopReason === 'tool_use' ? 'end_turn' : stopReason;
+  if (effectiveStopReason === 'tool_use') {
     const toolBatch = await runToolCallBatch(step, response);
     if (toolBatch.stopTurn) effectiveStopReason = 'end_turn';
   }
@@ -144,7 +152,7 @@ export async function executeLoopStep(deps: ExecuteLoopStepDeps): Promise<{
     ...stepEndProviderDiagnostics(response, effectiveStopReason),
   });
 
-  let stopTurnAfterStep = false;
+  let stopTurnAfterStep = stopTurnAfterUsage;
   if (hooks?.afterStep !== undefined) {
     try {
       const afterStep = await hooks.afterStep({
@@ -155,7 +163,7 @@ export async function executeLoopStep(deps: ExecuteLoopStepDeps): Promise<{
         signal,
         llm,
       });
-      stopTurnAfterStep = afterStep?.stopTurn === true;
+      stopTurnAfterStep = stopTurnAfterStep || afterStep?.stopTurn === true;
     } catch {
       // The step is already sealed; observer hooks cannot change the result.
     }

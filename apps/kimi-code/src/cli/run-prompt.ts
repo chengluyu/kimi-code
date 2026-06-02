@@ -110,16 +110,17 @@ export async function runPrompt(
   try {
     await harness.ensureConfigFile();
     const config = await harness.getConfig();
-    const { session, resumed, restorePermission, telemetryModel } = await resolvePromptSession(
-      harness,
-      opts,
-      workDir,
-      config.defaultModel,
-      stderr,
-      (restorePermission) => {
-        restorePromptSessionPermission = restorePermission;
-      },
-    );
+    const { session, resumed, restorePermission, telemetryModel, goalModel } =
+      await resolvePromptSession(
+        harness,
+        opts,
+        workDir,
+        config.defaultModel,
+        stderr,
+        (restorePermission) => {
+          restorePromptSessionPermission = restorePermission;
+        },
+      );
     restorePromptSessionPermission = restorePermission;
 
     initializeCliTelemetry({
@@ -147,7 +148,7 @@ export async function runPrompt(
     const flagMap = await harness.getExperimentalFlags();
     const goalCreate = parseHeadlessGoalCreate(opts.prompt!, flagMap['goal-command'] === true);
     if (goalCreate !== undefined) {
-      await runHeadlessGoal(session, goalCreate, outputFormat, stdout, stderr);
+      await runHeadlessGoal(session, goalCreate, goalModel, outputFormat, stdout, stderr);
     } else {
       await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
     }
@@ -164,10 +165,12 @@ export async function runPrompt(
 async function runHeadlessGoal(
   session: Session,
   goal: HeadlessGoalCreate,
+  model: string | undefined,
   outputFormat: PromptOutputFormat,
   stdout: PromptOutput,
   stderr: PromptOutput,
 ): Promise<void> {
+  requireConfiguredModel(model);
   await session.createGoal({
     objective: goal.objective,
     replace: goal.replace,
@@ -207,6 +210,7 @@ interface ResolvedPromptSession {
   readonly resumed: boolean;
   readonly restorePermission: () => Promise<void>;
   readonly telemetryModel?: string;
+  readonly goalModel?: string;
 }
 
 async function resolvePromptSession(
@@ -250,6 +254,7 @@ async function resolvePromptSession(
       resumed: true,
       restorePermission,
       telemetryModel: configuredModel(opts.model, status.model, defaultModel),
+      goalModel: configuredModel(opts.model, status.model),
     };
   }
 
@@ -273,6 +278,7 @@ async function resolvePromptSession(
         resumed: true,
         restorePermission,
         telemetryModel: configuredModel(opts.model, status.model, defaultModel),
+        goalModel: configuredModel(opts.model, status.model),
       };
     }
     stderr.write(`No sessions to continue under "${workDir}"; starting a fresh session.\n`);
@@ -281,7 +287,13 @@ async function resolvePromptSession(
   const model = requireConfiguredModel(opts.model, defaultModel);
   const session = await harness.createSession({ workDir, model, permission: 'auto' });
   installHeadlessHandlers(session);
-  return { session, resumed: false, restorePermission: async () => {}, telemetryModel: model };
+  return {
+    session,
+    resumed: false,
+    restorePermission: async () => {},
+    telemetryModel: model,
+    goalModel: model,
+  };
 }
 
 async function forcePromptPermission(

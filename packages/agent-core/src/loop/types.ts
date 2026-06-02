@@ -65,6 +65,12 @@ export interface ExecutableToolSuccessResult {
   readonly output: ExecutableToolOutput;
   readonly isError?: false | undefined;
   /**
+   * Internal loop-control hint. Tool result events strip this field before
+   * persistence; it only tells the current turn whether another model step or
+   * later tool calls in the same batch are allowed.
+   */
+  readonly stopTurn?: boolean | undefined;
+  /**
    * Optional human-readable side channel for tool-result metadata that
    * should not contaminate the data stream the model sees (e.g. a
    * "Task snapshot retrieved." brief for TaskOutput). Distinct from
@@ -115,6 +121,11 @@ export interface RunnableToolExecution {
   readonly accesses?: ToolAccesses | undefined;
   readonly display?: ToolInputDisplay | undefined;
   readonly description?: string;
+  /**
+   * Stops scheduling later tool calls in the same provider batch. Use this only
+   * for tools whose successful action changes turn lifecycle state.
+   */
+  readonly stopBatchAfterThis?: boolean | undefined;
   readonly approvalRule: string;
   readonly matchesRule?: ((ruleArgs: string) => boolean) | undefined;
   readonly execute: (ctx: ExecutableToolContext) => Promise<ExecutableToolResult>;
@@ -179,6 +190,14 @@ export interface BeforeStepResult {
 }
 
 export interface AfterStepResult {
+  readonly stopTurn?: boolean | undefined;
+}
+
+export interface RecordStepUsageResult {
+  /**
+   * Internal loop-control hint. Hosts can return this after recording usage
+   * when the completed model step has reached a hard runtime limit.
+   */
   readonly stopTurn?: boolean | undefined;
 }
 

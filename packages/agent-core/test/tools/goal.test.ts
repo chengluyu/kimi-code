@@ -200,22 +200,34 @@ describe('UpdateGoalTool', () => {
   it('`complete` marks the goal complete and clears it (transient)', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    const result = await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'complete' }));
+    const result = await executeTool(
+      new UpdateGoalTool(agentWithContext(store)),
+      ctx({ status: 'complete' }),
+    );
     expect(result.isError).toBeFalsy();
+    expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal).toBeNull();
   });
 
   it('`blocked` marks the goal blocked (resumable)', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'blocked' }));
+    const result = await executeTool(
+      new UpdateGoalTool(agentWithContext(store)),
+      ctx({ status: 'blocked' }),
+    );
+    expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal?.status).toBe('blocked');
   });
 
   it('`paused` marks the goal paused', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'work' });
-    await executeTool(new UpdateGoalTool(agentWithContext(store)), ctx({ status: 'paused' }));
+    const result = await executeTool(
+      new UpdateGoalTool(agentWithContext(store)),
+      ctx({ status: 'paused' }),
+    );
+    expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal?.status).toBe('paused');
   });
 

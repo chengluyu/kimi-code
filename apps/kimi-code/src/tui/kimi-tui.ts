@@ -403,7 +403,6 @@ export class KimiTUI {
     // Mount only after init() succeeds; see mountFooter().
     this.mountFooter();
     this.renderWelcome();
-    setExperimentalFlags(await this.harness.getExperimentalFlags());
     this.setupAutocomplete();
     void this.loadPersistedInputHistory();
     this.state.editorContainer.clear();
@@ -472,6 +471,7 @@ export class KimiTUI {
   }
 
   private async init(): Promise<boolean> {
+    setExperimentalFlags(await this.harness.getExperimentalFlags());
     await this.authFlow.refreshAvailableModels();
     void this.refreshProviderModelsInBackground();
 
@@ -1007,7 +1007,12 @@ export class KimiTUI {
   }
 
   async syncRuntimeState(session: Session = this.requireSession()): Promise<void> {
-    const [status, goalResult] = await Promise.all([session.getStatus(), session.getGoal()]);
+    const [status, goalResult] = await Promise.all([
+      session.getStatus(),
+      isExperimentalFlagEnabled('goal-command')
+        ? session.getGoal()
+        : Promise.resolve({ goal: null }),
+    ]);
     this.setAppState({
       sessionId: session.id,
       model: status.model ?? '',

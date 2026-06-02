@@ -122,7 +122,6 @@ describe('goal session end-to-end', () => {
       name: 'UpdateGoal',
       arguments: JSON.stringify({ status: 'complete' }),
     });
-    scripted.mockNextResponse({ type: 'text', text: 'The goal is complete.' });
 
     agent.turn.prompt([{ type: 'text', text: 'Ship feature X' }]);
     // Wait for the whole goal drive (many turns), not just the first turn.ended.
@@ -143,13 +142,14 @@ describe('goal session end-to-end', () => {
     expect(continuationHistory).toContain('Keep the self-audit brief');
     expect(continuationHistory).toContain('do not run another goal turn');
 
-    // After UpdateGoal runs, Anthropic-compatible providers require the next
-    // request to end with a user message, not an assistant prefill.
-    const afterUpdateGoalHistory = scripted.calls[2]?.history ?? [];
-    const lastAfterUpdateGoal = afterUpdateGoalHistory.at(-1);
-    expect(lastAfterUpdateGoal?.role).toBe('user');
-    expect(JSON.stringify(lastAfterUpdateGoal?.content)).toContain('<system-reminder>');
-    expect(JSON.stringify(lastAfterUpdateGoal?.content)).toContain('Goal complete.');
+    // Terminal UpdateGoal ends the turn immediately. The completion reminder is
+    // still appended after the tool result, so any later request ends with a
+    // user message rather than an assistant prefill.
+    expect(scripted.calls).toHaveLength(2);
+    const lastContextMessage = agent.context.history.at(-1);
+    expect(lastContextMessage?.role).toBe('user');
+    expect(JSON.stringify(lastContextMessage?.content)).toContain('<system-reminder>');
+    expect(JSON.stringify(lastContextMessage?.content)).toContain('Goal complete.');
 
     // Completion is transient: it announces, then clears the durable record, so
     // the goal box disappears and nothing is left on disk.
@@ -214,12 +214,11 @@ describe('goal session end-to-end', () => {
       name: 'UpdateGoal',
       arguments: JSON.stringify({ status: 'complete' }),
     });
-    scripted.mockNextResponse({ type: 'text', text: 'Done.' });
 
     agent.turn.prompt([{ type: 'text', text: 'Keep working on the goal' }]);
     await agent.turn.waitForCurrentTurn();
 
-    expect(scripted.calls.length).toBeGreaterThanOrEqual(4);
+    expect(scripted.calls.length).toBeGreaterThanOrEqual(3);
     expect(JSON.stringify(scripted.calls[0]?.history ?? [])).toContain('currently paused');
     expect(JSON.stringify(scripted.calls[2]?.history ?? [])).toContain('Continue working toward the active goal');
     expect(api.getGoal({}).goal).toBeNull();
@@ -364,7 +363,7 @@ describe('goal session end-to-end', () => {
   it('supports user lifecycle controls without a model turn', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
-    const { session } = await setupSession(sessionDir, events, ['GetGoal']);
+    const { session, agent } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
 
     await api.createGoal({ objective: 'work' });
@@ -373,6 +372,12 @@ describe('goal session end-to-end', () => {
     // cancel discards the goal and returns its prior (active) snapshot.
     expect((await api.cancelGoal({})).status).toBe('active');
     expect(api.getGoal({}).goal).toBeNull();
+    const cancelReminder = agent.context.history.at(-1);
+    expect(cancelReminder?.origin).toMatchObject({
+      kind: 'system_trigger',
+      name: 'goal_cancelled',
+    });
+    expect(JSON.stringify(cancelReminder?.content)).toContain('Ignore earlier active-goal reminders');
 
     await api.createGoal({ objective: 'again' });
     await api.cancelGoal({});
