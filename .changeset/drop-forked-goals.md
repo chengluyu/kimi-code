@@ -3,4 +3,4 @@
 "@moonshot-ai/kimi-code": patch
 ---
 
-Stop carrying active goals into forked sessions.
+Stop carrying active and queued goals into forked sessions.

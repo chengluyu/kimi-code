@@ -81,6 +81,11 @@ describe('SessionStore.list', () => {
     const sourceAgentDir = join(source.sessionDir, 'agents', 'main');
     await mkdir(sourceAgentDir, { recursive: true });
     await writeFile(join(sourceAgentDir, 'wire.jsonl'), '{"type":"context.clear"}\n', 'utf-8');
+    await writeFile(
+      join(source.sessionDir, 'upcoming-goals.json'),
+      `${JSON.stringify({ version: 1, goals: [{ id: 'queued-1', objective: 'source queued goal' }] })}\n`,
+      'utf-8',
+    );
     await writeSessionState(source.sessionDir, {
       createdAt: '2030-01-01T00:00:00.000Z',
       updatedAt: '2030-01-01T00:00:00.000Z',
@@ -135,6 +140,8 @@ describe('SessionStore.list', () => {
     expect(forkState.agents?.main?.homedir).toBe(join(fork.sessionDir, 'agents', 'main'));
     expect(forkState.custom).toMatchObject({ source: true, child: true });
     expect(forkState.custom).not.toHaveProperty('goal');
+    expect(existsSync(join(fork.sessionDir, 'upcoming-goals.json'))).toBe(false);
+    expect(existsSync(join(source.sessionDir, 'upcoming-goals.json'))).toBe(true);
     await expect(readFile(join(fork.sessionDir, 'agents', 'main', 'wire.jsonl'), 'utf-8')).resolves.toBe(
       '{"type":"context.clear"}\n',
     );

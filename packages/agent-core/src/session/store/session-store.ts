@@ -17,6 +17,8 @@ const SessionSummaryStateSchema = z.object({
   custom: z.record(z.string(), z.unknown()).optional(),
 });
 
+const FORKED_SESSION_DROPPED_FILES = ['upcoming-goals.json'] as const;
+
 type SessionSummaryState = z.infer<typeof SessionSummaryStateSchema>;
 
 export interface CreateSessionRecordInput {
@@ -90,6 +92,7 @@ export class SessionStore {
         force: false,
         errorOnExist: true,
       });
+      await dropForkedSessionFiles(targetDir);
       await this.writeForkedState(input, source.sessionDir, targetDir);
       const summary = await this.summaryFromDir(input.targetId, targetDir, source.workDir);
       await appendSessionIndexEntry(this.homeDir, {
@@ -306,6 +309,12 @@ function forkCustomMetadata(source: unknown, metadata: JsonObject | undefined): 
     ...customMetadataWithoutGoal(source),
     ...customMetadataWithoutGoal(metadata),
   };
+}
+
+async function dropForkedSessionFiles(sessionDir: string): Promise<void> {
+  await Promise.all(
+    FORKED_SESSION_DROPPED_FILES.map((fileName) => rm(join(sessionDir, fileName), { force: true })),
+  );
 }
 
 function customMetadataWithoutGoal(value: unknown): Record<string, unknown> {
