@@ -97,6 +97,32 @@ describe('GoalQueueManagerComponent', () => {
     expect(out).toContain('1. Second queued goal');
   });
 
+  it('invalidates after an async queue action updates the list', async () => {
+    const first = goal('g1', 'First queued goal');
+    const second = goal('g2', 'Second queued goal');
+    let resolveAction: (value: GoalQueueSnapshot) => void;
+    const onAction = vi.fn(
+      () =>
+        new Promise<GoalQueueSnapshot>((resolve) => {
+          resolveAction = resolve;
+        }),
+    );
+    const manager = new GoalQueueManagerComponent({
+      goals: [first, second],
+      colors: darkColors,
+      onAction,
+      onCancel: vi.fn(),
+    });
+    const invalidate = vi.spyOn(manager, 'invalidate');
+
+    manager.handleInput('d');
+    resolveAction!(snapshot([second]));
+
+    await vi.waitFor(() => {
+      expect(invalidate).toHaveBeenCalled();
+    });
+  });
+
   it('emits an edit action for the selected goal', () => {
     const onAction = vi.fn();
     const manager = new GoalQueueManagerComponent({

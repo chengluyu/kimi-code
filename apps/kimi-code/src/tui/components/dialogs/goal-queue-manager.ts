@@ -176,6 +176,7 @@ export class GoalQueueManagerComponent extends Container implements Focusable {
       }
     } finally {
       this.busy = false;
+      this.invalidate();
     }
   }
 
