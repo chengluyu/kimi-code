@@ -624,6 +624,12 @@ export class SessionEventHandler {
     this.queuedGoalPromotionTimer = setTimeout(() => {
       this.queuedGoalPromotionTimer = undefined;
       if (!this.queuedGoalPromotionPending || !this.goalCompletionTurnEnded) return;
+      if (
+        this.host.state.appState.streamingPhase !== 'idle' ||
+        this.host.state.queuedMessages.length > 0
+      ) {
+        return;
+      }
       this.queuedGoalPromotionPending = false;
       this.goalCompletionTurnEnded = false;
       void this.promoteNextQueuedGoal();

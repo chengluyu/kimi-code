@@ -53,6 +53,7 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
         model: 'kimi-model',
         permissionMode: 'auto',
       },
+      queuedMessages: [],
       theme: { colors: getColorPalette('dark') },
       toolOutputExpanded: false,
       todoPanel: { getTodos: vi.fn(() => []) },
@@ -86,7 +87,19 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
     btwPanelController: { routeEvent: vi.fn(() => false) },
     tasksBrowserController: {},
   };
+  host.setAppState.mockImplementation((patch: Record<string, unknown>) => {
+    Object.assign(host.state.appState, patch);
+  });
+  host.streamingUI.finalizeTurn.mockImplementation(() => {
+    host.setAppState({ streamingPhase: 'idle' });
+  });
   return { host: host as any, session };
+}
+
+function sendQueuedViaHost(host: ReturnType<typeof makeHost>['host'], session: unknown) {
+  return (item: unknown) => {
+    host.sendQueuedMessage(session as never, item as never);
+  };
 }
 
 function completionEvent() {
@@ -139,7 +152,7 @@ describe('SessionEventHandler goal queue promotion', () => {
     expect(session.createGoal).not.toHaveBeenCalled();
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
 
-    handler.handleEvent(turnEndedEvent(), vi.fn());
+    handler.handleEvent(turnEndedEvent(), sendQueuedViaHost(host, session));
 
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalledWith({
@@ -153,6 +166,53 @@ describe('SessionEventHandler goal queue promotion', () => {
     });
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
     expect(host.track).toHaveBeenCalledWith('goal_create', { replace: false });
+  });
+
+  it('waits for queued user input to drain before promoting the next queued goal', async () => {
+    const { host, session } = makeHost();
+    host.state.queuedMessages = [{ text: 'queued user turn' }];
+    host.setAppState.mockImplementation((patch: Record<string, unknown>) => {
+      Object.assign(host.state.appState, patch);
+    });
+    host.shiftQueuedMessage.mockImplementation(() => host.state.queuedMessages.shift());
+    host.streamingUI.finalizeTurn.mockImplementation((sendQueued: (item: unknown) => void) => {
+      const next = host.shiftQueuedMessage();
+      if (next !== undefined) {
+        host.setAppState({ streamingPhase: 'idle' });
+        setTimeout(() => {
+          sendQueued(next);
+        }, 0);
+        return;
+      }
+      host.setAppState({ streamingPhase: 'idle' });
+    });
+    host.sendQueuedMessage.mockImplementation((_session: unknown, item: { text: string }) => {
+      if (item.text === 'queued user turn') {
+        host.setAppState({ streamingPhase: 'waiting' });
+      }
+    });
+    const handler = new SessionEventHandler(host);
+    const sendQueued = sendQueuedViaHost(host, session);
+
+    handler.handleEvent(completionEvent(), sendQueued);
+    handler.handleEvent(clearedEvent(), sendQueued);
+    handler.handleEvent(turnEndedEvent(), sendQueued);
+
+    await vi.waitFor(() => {
+      expect(host.sendQueuedMessage).toHaveBeenCalledWith(session, { text: 'queued user turn' });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(session.createGoal).not.toHaveBeenCalled();
+
+    handler.handleEvent(turnEndedEvent(), sendQueued);
+
+    await vi.waitFor(() => {
+      expect(session.createGoal).toHaveBeenCalledWith({
+        objective: 'Ship queued goal',
+        replace: false,
+      });
+    });
+    expect(host.sendQueuedMessage).toHaveBeenLastCalledWith(session, { text: 'Ship queued goal' });
   });
 
   it('leaves the queued goal in place when the next goal cannot start', async () => {
