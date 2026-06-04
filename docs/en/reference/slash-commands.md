@@ -60,21 +60,11 @@ KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND=1 kimi
 ```
 :::
 
-`/goal` is for tasks you want Kimi Code to work on continuously across automatically continuing turns. Write the goal after the command to start:
+`/goal` starts or manages goal mode: a persistent objective that Kimi Code works toward across automatically continuing turns. For usage guidance and examples, see [Goals](../guides/goals.md).
 
 ```
 /goal Update the checkout docs, run docs build, and stop if still blocked after 20 turns
 ```
-
-Kimi Code saves the goal, sends it as the next User message, and keeps running subsequent turns until the goal stops. A goal has three stop states:
-
-- `complete`: The goal is done — Kimi Code sends a completion message and clears the goal
-- `paused`: You paused the goal, interrupted the current turn, or resumed a session that had an active goal
-- `blocked`: Kimi Code stopped because it needs input, cannot complete the goal, reached a budget limit, or encountered a runtime failure
-
-Stop conditions must be written into the goal itself; `/goal` has no separate stop-limit flag.
-
-Subcommands for managing the current goal:
 
 | Command | Action | Availability |
 | --- | --- | --- |
@@ -85,10 +75,6 @@ Subcommands for managing the current goal:
 | `/goal replace <objective>` | Replace the saved goal with a new objective | Idle only |
 | `/goal next <objective>` | Queue an upcoming goal for this session. The agent does not see it until the current goal completes | Always available |
 | `/goal next manage` | Open the upcoming-goal manager. Use `↑`/`↓` to browse, `Space` to select a goal for moving, selected `↑`/`↓` to reorder it, `E` to edit, `D` to delete, and `Esc` to cancel | Always available |
-
-Only one current goal can run in a session. If you already have one, start a different one with `/goal replace <objective>`. Use `/goal next <objective>` when you want to save more work without interrupting the current goal.
-
-Upcoming goals are saved with the session. They are not sent to the agent until the current goal completes. If the current goal is paused, canceled, or blocked, Kimi Code does not start the next queued goal. When a goal blocks and the queue is not empty, the TUI reminds you that queued goals wait for completion.
 
 The words `status`, `pause`, `resume`, `cancel`, `replace`, and `next` act as subcommands only when they are the first word after `/goal`. If your objective needs to start with one of those words, put `--` before it:
 
@@ -101,8 +87,6 @@ If an upcoming goal needs to start with `manage`, put `--` after `next`:
 ```sh
 /goal next -- manage the release checklist
 ```
-
-In `manual` permission mode, the goal may pause to wait for tool call approval — not suitable for unattended scenarios.
 
 In non-interactive prompt mode, only the create forms start goal mode:
 
