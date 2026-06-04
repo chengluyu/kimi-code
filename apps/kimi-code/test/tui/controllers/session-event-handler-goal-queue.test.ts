@@ -133,6 +133,21 @@ describe('SessionEventHandler goal queue promotion', () => {
     expect(session.createGoal).toHaveBeenCalledOnce();
   });
 
+  it('does not send the queued objective when removal fails after goal creation', async () => {
+    vi.mocked(removeGoalQueueItem).mockRejectedValueOnce(new Error('remove failed'));
+    const { host, session } = makeHost();
+    const handler = new SessionEventHandler(host);
+
+    handler.handleEvent(completionEvent(), vi.fn());
+    handler.handleEvent(clearedEvent(), vi.fn());
+
+    await vi.waitFor(() => {
+      expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('could not be removed'));
+    });
+    expect(session.createGoal).toHaveBeenCalledWith({ objective: 'Ship queued goal' });
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+  });
+
   it('shows a notice when a blocked goal has queued goals', async () => {
     const { host, session } = makeHost();
     const handler = new SessionEventHandler(host);

@@ -633,6 +633,7 @@ export class SessionEventHandler {
       host.showError(
         `Queued goal started, but could not be removed from the queue: ${formatErrorMessage(error)}`,
       );
+      return;
     }
     if (host.session !== session || host.aborted) return;
 
