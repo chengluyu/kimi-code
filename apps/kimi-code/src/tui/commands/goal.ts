@@ -304,7 +304,10 @@ export async function createGoal(
     return false;
   }
 
-  if (host.state.appState.permissionMode === 'manual') {
+  if (
+    host.state.appState.permissionMode === 'manual' ||
+    host.state.appState.permissionMode === 'yolo'
+  ) {
     showGoalStartPermissionPrompt(host, parsed, rawArgs ?? parsed.objective, options);
     return false;
   }
@@ -326,6 +329,7 @@ function showGoalStartPermissionPrompt(
   host.mountEditorReplacement(
     new GoalStartPermissionPromptComponent({
       colors: host.state.theme.colors,
+      mode: host.state.appState.permissionMode === 'yolo' ? 'yolo' : 'manual',
       onSelect: (choice) => {
         if (choice === 'cancel') {
           cancelStart();
@@ -345,7 +349,7 @@ async function startGoalWithPermission(
   choice: GoalStartPermissionChoice,
   options: GoalStartOptions,
 ): Promise<void> {
-  if (choice === 'auto' || choice === 'yolo') {
+  if (choice !== host.state.appState.permissionMode && (choice === 'auto' || choice === 'yolo')) {
     if (!(await setPermissionForGoal(host, choice))) return;
   }
   await startGoal(host, parsed, options);

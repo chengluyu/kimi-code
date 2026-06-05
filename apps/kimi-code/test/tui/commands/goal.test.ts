@@ -357,6 +357,66 @@ describe('handleGoalCommand', () => {
     expect(s.createGoal).not.toHaveBeenCalled();
   });
 
+  it('asks before starting a goal in YOLO mode', async () => {
+    const { host: yoloHost, session: s } = makeHost({ permissionMode: 'yolo' });
+
+    await handleGoalCommand(yoloHost, 'Ship feature X');
+
+    expect(yoloHost.mountEditorReplacement).toHaveBeenCalledOnce();
+    expect(s.createGoal).not.toHaveBeenCalled();
+    expect(yoloHost.sendNormalUserInput).not.toHaveBeenCalled();
+    const text = stripAnsi(mountedPicker(yoloHost).render(80).join('\n'));
+    expect(text).toContain('YOLO mode can still stop for questions');
+    expect(text).toContain('Keep YOLO and start');
+    expect(text).not.toContain('Start in Manual');
+  });
+
+  it('defaults to Auto when confirming a YOLO-mode goal start', async () => {
+    const { host: yoloHost, session: s } = makeHost({ permissionMode: 'yolo' });
+
+    await handleGoalCommand(yoloHost, 'Ship feature X');
+    mountedPicker(yoloHost).handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(s.createGoal).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: 'Ship feature X' }),
+      );
+    });
+    expect(s.setPermission).toHaveBeenCalledWith('auto');
+    expect(yoloHost.setAppState).toHaveBeenCalledWith({ permissionMode: 'auto' });
+    expect(yoloHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
+  });
+
+  it('can keep YOLO when starting a YOLO-mode goal', async () => {
+    const { host: yoloHost, session: s } = makeHost({ permissionMode: 'yolo' });
+
+    await handleGoalCommand(yoloHost, 'Ship feature X');
+    const picker = mountedPicker(yoloHost);
+    picker.handleInput(DOWN);
+    picker.handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(s.createGoal).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: 'Ship feature X' }),
+      );
+    });
+    expect(s.setPermission).not.toHaveBeenCalled();
+    expect(yoloHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
+  });
+
+  it('returns the command to the input box when a YOLO-mode goal start is cancelled', async () => {
+    const { host: yoloHost, session: s } = makeHost({ permissionMode: 'yolo' });
+
+    await handleGoalCommand(yoloHost, 'replace Ship feature Y');
+    const picker = mountedPicker(yoloHost);
+    picker.handleInput(DOWN);
+    picker.handleInput(DOWN);
+    picker.handleInput(ENTER);
+
+    expect(yoloHost.restoreInputText).toHaveBeenCalledWith('/goal replace Ship feature Y');
+    expect(s.createGoal).not.toHaveBeenCalled();
+  });
+
   it('does not pass budget limits (flags were removed)', async () => {
     await handleGoalCommand(host, 'Ship feature X');
     const arg = (session.createGoal as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<
