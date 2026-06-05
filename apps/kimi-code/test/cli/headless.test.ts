@@ -91,11 +91,11 @@ function outputWriter() {
   };
 }
 
-async function waitForAssertion(assertion: () => void): Promise<void> {
+async function waitForAssertion(assertion: () => void | Promise<void>): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
-      assertion();
+      await assertion();
       return;
     } catch (error) {
       lastError = error;
@@ -1023,6 +1023,82 @@ describe('runHeadless prompt run command', () => {
         completedToolCallCount: 1,
       },
     });
+  });
+
+  it('updates the status file while a turn is running', async () => {
+    const dir = await createTempDir();
+    const statusFile = path.join(dir, 'status.json');
+    const runtime = createFakeHeadlessRuntime();
+    runtime.session.prompt.mockImplementationOnce(async () => {
+      runtime.emit({
+        type: 'turn.started',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        origin: { kind: 'user' },
+      });
+      runtime.emit({
+        type: 'tool.call.started',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        toolCallId: 'call_1',
+        name: 'functions.exec_command',
+        description: 'Run tests',
+        args: { cmd: 'pnpm test' },
+      });
+      await waitForAssertion(async () => {
+        await expect(readHeadlessRunStatus(statusFile)).resolves.toMatchObject({
+          state: 'running',
+          lastEvent: 'tool.call.started',
+          activeTool: {
+            toolCallId: 'call_1',
+            name: 'functions.exec_command',
+            description: 'Run tests',
+          },
+          summary: {
+            toolCallCount: 1,
+          },
+        });
+      });
+      runtime.emit({
+        type: 'tool.result',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        toolCallId: 'call_1',
+        output: 'ok',
+      });
+      runtime.emit({
+        type: 'turn.ended',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        reason: 'completed',
+      });
+    });
+
+    await runHeadless(
+      {
+        kind: 'run',
+        options: {
+          prompt: 'inspect',
+          cwd: '/repo',
+          continue: false,
+          statusFile,
+          metadataOnly: true,
+          approvePlan: false,
+          rejectPlan: false,
+          skillsDirs: [],
+        },
+      },
+      '1.2.3-test',
+      {
+        stdout: outputWriter(),
+        createHarness: () => runtime.harness,
+        acquireSessionRunLock: runtime.acquireLock,
+      },
+    );
   });
 
   it('omits Markdown when metadataOnly is set', async () => {

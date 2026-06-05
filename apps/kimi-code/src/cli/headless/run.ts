@@ -118,6 +118,8 @@ interface RunContext {
   turnResponses: Array<{ readonly turnId: number | null; readonly markdown: string }>;
   goalTerminal: boolean;
   planApprovalSeen: boolean;
+  statusWriteQueue: Promise<void>;
+  statusWriteError: Error | null;
 }
 
 interface GoalSnapshotLike {
@@ -369,6 +371,8 @@ function createRunContext(input: {
     turnResponses: [],
     goalTerminal: false,
     planApprovalSeen: false,
+    statusWriteQueue: Promise.resolve(),
+    statusWriteError: null,
     status: {
       schemaVersion: 1,
       runId: input.runId,
@@ -577,11 +581,11 @@ function handleRunEvent(context: RunContext, event: Event & { readonly turnId: n
       context.assistantMarkdown += event.delta;
       context.currentTurnMarkdown += event.delta;
       context.summary.assistantCharCount += event.delta.length;
-      updateRunStatus(context, 'running', event.type);
+      updateRunStatus(context, 'running', event.type, { write: false });
       return;
     case 'thinking.delta':
       context.summary.thinkingCharCount += event.delta.length;
-      updateRunStatus(context, 'running', event.type);
+      updateRunStatus(context, 'running', event.type, { write: false });
       return;
     case 'tool.call.started':
       context.summary.toolCallCount += 1;
@@ -623,7 +627,7 @@ function updateRunStatus(
   context: RunContext,
   state: HeadlessRunState,
   lastEvent: string,
-  options: { readonly turnId?: number; readonly error?: Error } = {},
+  options: { readonly turnId?: number; readonly error?: Error; readonly write?: boolean } = {},
 ): void {
   const updatedAt = new Date().toISOString();
   context.status = {
@@ -637,6 +641,7 @@ function updateRunStatus(
     files: context.files,
     error: options.error === undefined ? context.status.error : { message: options.error.message },
   };
+  if (options.write !== false) scheduleCurrentRunStatus(context);
 }
 
 async function writeRunStatus(context: RunContext, state: HeadlessRunState): Promise<void> {
@@ -646,7 +651,24 @@ async function writeRunStatus(context: RunContext, state: HeadlessRunState): Pro
 
 async function writeCurrentRunStatus(context: RunContext): Promise<void> {
   if (context.statusFile === undefined) return;
-  await writeHeadlessRunStatus(context.statusFile, context.status);
+  scheduleCurrentRunStatus(context);
+  await flushScheduledRunStatusWrites(context);
+}
+
+function scheduleCurrentRunStatus(context: RunContext): void {
+  if (context.statusFile === undefined) return;
+  const statusFile = context.statusFile;
+  const status = context.status;
+  context.statusWriteQueue = context.statusWriteQueue
+    .then(() => writeHeadlessRunStatus(statusFile, status))
+    .catch((error: unknown) => {
+      context.statusWriteError = error instanceof Error ? error : new Error(String(error));
+    });
+}
+
+async function flushScheduledRunStatusWrites(context: RunContext): Promise<void> {
+  await context.statusWriteQueue;
+  if (context.statusWriteError !== null) throw context.statusWriteError;
 }
 
 async function finalizeHeadlessRun(
