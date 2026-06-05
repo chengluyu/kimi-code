@@ -1,8 +1,6 @@
 # Goals
 
-Goals keep Kimi Code working toward a defined outcome across turns. Use `/goal` when the task has a clear finish line, but the next useful step depends on what the agent learns while it works.
-
-A normal prompt says what to do next. A goal says what must become true. Kimi Code keeps that objective visible, checks progress against evidence, and continues while the goal is active.
+Goals keep Kimi Code working toward a defined outcome across turns. Unlike a normal prompt that says what to do next, a goal says what must become true. Use `/goal` when the task has a clear finish line, but the next useful step depends on what the agent learns while it works — for example, fixing a batch of failing tests or tracking down the root cause of a broken build.
 
 ::: info
 `/goal` is still experimental. Start `kimi` with:
@@ -108,9 +106,9 @@ Use the same command surface to inspect or control the current goal:
 
 A goal can stop in three ways:
 
-- `complete`: the objective is done, and Kimi Code clears the goal
-- `paused`: you paused it, interrupted the turn, or resumed a session that had an active goal
-- `blocked`: Kimi Code needs input, cannot complete the goal as stated, reached a budget limit, or hit a runtime failure
+- **complete**: the objective is done, and Kimi Code clears the goal
+- **paused**: you paused it, interrupted the turn, or resumed a session that had an active goal
+- **blocked**: Kimi Code needs input, cannot complete the goal as stated, reached a budget limit, or hit a runtime failure
 
 Write stop conditions into the objective. `/goal` does not have a separate stop-limit flag.
 
@@ -136,7 +134,7 @@ Manage upcoming goals interactively:
 
 In the manager, use <kbd>↑</kbd> / <kbd>↓</kbd> to browse, <kbd>Space</kbd> to select a goal for moving, <kbd>↑</kbd> / <kbd>↓</kbd> to reorder it, <kbd>E</kbd> to edit, <kbd>D</kbd> to delete, and <kbd>Esc</kbd> to cancel. When editing, use <kbd>Shift-Enter</kbd> or <kbd>Ctrl-J</kbd> to add a new line, and <kbd>Enter</kbd> to save.
 
-The feature helps you run sequential goals in a manageable way. If the current goal is paused, canceled, or blocked, Kimi Code does not start the next upcoming goal. When a goal blocks and upcoming goals exist, the TUI reminds you that they wait for completion.
+If the current goal is paused, canceled, or blocked, Kimi Code does not start the next upcoming goal. When a goal blocks and upcoming goals exist, the TUI reminds you that they wait for completion.
 
 ## Use goal mode carefully
 
