@@ -198,6 +198,27 @@ This milestone shall cover:
 - [x] Docs build passes with the repo pnpm environment.
 - [ ] Self-contained commit created.
 
+## Current Milestone 9
+
+Run manual headless trials and example projects.
+
+This milestone shall cover:
+
+- Built CLI smoke checks after the final code commit.
+- Three side projects under `~/Developer/@kimi-examples/`.
+- At least 10 headless turns per side project.
+- Status file polling and metadata/file output during the trials.
+- Reports with DOs and DONTs from the trial runs.
+
+## Milestone 9 Progress
+
+- [x] Built CLI smoke checks pass.
+- [x] Example project 1 reaches at least 10 turns: `headless-js-checklist`, 11 completed turns.
+- [x] Example project 2 reaches at least 10 turns: `headless-python-textstats`, 10 completed turns and one pre-fix interrupted turn.
+- [x] Example project 3 reaches at least 10 turns: `headless-web-timer`, 11 completed turns.
+- [x] Reports written.
+- [x] Self-contained commit created if repository files change.
+
 ## Later Milestones
 
 - [x] Status, output, output-file, control, and approval helpers.
@@ -207,6 +228,6 @@ This milestone shall cover:
 - [x] Goal-backed multi-turn execution and file output.
 - [x] Fail-safe plan approval flags.
 - [x] Docs and changeset.
-- [ ] Build CLI and run manual headless trials.
-- [ ] Three example projects under `~/Developer/@kimi-examples/`.
-- [ ] Reports with DOs and DONTs.
+- [x] Build CLI and run manual headless trials.
+- [x] Three example projects under `~/Developer/@kimi-examples/`.
+- [x] Reports with DOs and DONTs.
