@@ -51,9 +51,32 @@ Goal control semantics:
 - [x] Typecheck passes.
 - [x] Self-contained commit created.
 
+## Current Milestone 3
+
+Add SDK session run locking.
+
+This milestone shall cover:
+
+- `packages/node-sdk/src/session-lock.ts`.
+- `acquireSessionRunLock` exported from the SDK.
+- `session.locked` public error code.
+- Live lock rejection.
+- Dead-pid stale lock replacement.
+- Guarded release that does not remove another run's lock.
+
+## Milestone 3 Progress
+
+- [x] Lock tests written.
+- [x] Lock tests fail for missing helper.
+- [x] Lock helper implemented.
+- [x] Focused tests pass.
+- [x] Typecheck passes.
+- [x] Build passes.
+- [x] Self-contained commit created.
+
 ## Later Milestones
 
-- [ ] Status, output, output-file, control, and approval helpers.
+- [x] Status, output, output-file, control, and approval helpers.
 - [ ] SDK session lock helper.
 - [ ] Headless run execution.
 - [ ] Goal-backed multi-turn execution and file output.
