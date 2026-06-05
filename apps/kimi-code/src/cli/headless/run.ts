@@ -51,6 +51,15 @@ interface HeadlessRunIO {
     readonly pid: number;
     readonly command: string;
   }) => Promise<HeadlessSessionRunLock>;
+  readonly processSignals?: HeadlessProcessSignals;
+}
+
+type HeadlessSignalName = 'SIGINT' | 'SIGTERM';
+
+interface HeadlessProcessSignals {
+  once(signal: HeadlessSignalName, listener: () => void | Promise<void>): void;
+  off(signal: HeadlessSignalName, listener: () => void | Promise<void>): void;
+  exit(code: number): never;
 }
 
 interface HeadlessHarness {
@@ -192,6 +201,27 @@ async function runHeadlessRun(
     skillDirs: options.skillsDirs,
   });
   let lock: HeadlessSessionRunLock | undefined;
+  let session: HeadlessSession | undefined;
+  let context: RunContext | undefined;
+  let lockReleased = false;
+  let harnessClosed = false;
+  const releaseLock = async (): Promise<void> => {
+    if (lockReleased) return;
+    lockReleased = true;
+    await lock?.release();
+  };
+  const closeHarness = async (): Promise<void> => {
+    if (harnessClosed) return;
+    harnessClosed = true;
+    await harness.close();
+  };
+  const removeSignalHandlers = installHeadlessSignalHandlers({
+    signals: io.processSignals ?? defaultProcessSignals,
+    getContext: () => context,
+    getSession: () => session,
+    releaseLock,
+    closeHarness,
+  });
 
   try {
     await harness.ensureConfigFile();
@@ -204,8 +234,8 @@ async function runHeadlessRun(
       pid: process.pid,
       command: 'headless run',
     });
-    const session = resolved.session;
-    const context = createRunContext({
+    session = resolved.session;
+    context = createRunContext({
       runId,
       startedAtMs,
       startedAt,
@@ -239,9 +269,61 @@ async function runHeadlessRun(
     await writeCurrentRunStatus(context);
     await finalizeHeadlessRun(context, stdout);
   } finally {
-    await lock?.release();
-    await harness.close();
+    removeSignalHandlers();
+    await releaseLock();
+    await closeHarness();
   }
+}
+
+const defaultProcessSignals: HeadlessProcessSignals = {
+  once: (signal, listener) => {
+    process.once(signal, listener);
+  },
+  off: (signal, listener) => {
+    process.off(signal, listener);
+  },
+  exit: (code) => process.exit(code),
+};
+
+function installHeadlessSignalHandlers(input: {
+  readonly signals: HeadlessProcessSignals;
+  readonly getContext: () => RunContext | undefined;
+  readonly getSession: () => HeadlessSession | undefined;
+  readonly releaseLock: () => Promise<void>;
+  readonly closeHarness: () => Promise<void>;
+}): () => void {
+  const sigintListener = () => handleHeadlessSignal('SIGINT', input);
+  const sigtermListener = () => handleHeadlessSignal('SIGTERM', input);
+  input.signals.once('SIGINT', sigintListener);
+  input.signals.once('SIGTERM', sigtermListener);
+  return () => {
+    input.signals.off('SIGINT', sigintListener);
+    input.signals.off('SIGTERM', sigtermListener);
+  };
+}
+
+async function handleHeadlessSignal(
+  signal: HeadlessSignalName,
+  input: {
+    readonly signals: HeadlessProcessSignals;
+    readonly getContext: () => RunContext | undefined;
+    readonly getSession: () => HeadlessSession | undefined;
+    readonly releaseLock: () => Promise<void>;
+    readonly closeHarness: () => Promise<void>;
+  },
+): Promise<void> {
+  const context = input.getContext();
+  const session = input.getSession();
+  await session?.cancel().catch(() => {});
+  if (context !== undefined) {
+    updateRunStatus(context, 'cancelled', `signal.${signal.toLowerCase()}`, {
+      error: new Error(`${signal} received`),
+    });
+    await writeCurrentRunStatus(context).catch(() => {});
+  }
+  await input.releaseLock().catch(() => {});
+  await input.closeHarness().catch(() => {});
+  input.signals.exit(signal === 'SIGINT' ? 130 : 143);
 }
 
 function recordUnusedPlanFlagWarning(context: RunContext, options: HeadlessRunOptions): void {
