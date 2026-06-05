@@ -150,6 +150,31 @@ This milestone shall cover:
 - [x] Real goal CLI smoke run passes with `KIMI_CODE_EXPERIMENTAL_GOAL_COMMAND=1`.
 - [x] Self-contained commit created.
 
+## Current Milestone 7
+
+Wire fail-safe plan approval flags.
+
+This milestone shall cover:
+
+- Plan approval handler for `ExitPlanMode` and `plan_review`.
+- `--approve-plan` approves plan review.
+- `--reject-plan` rejects and exits plan mode.
+- Missing plan flag cancels plan review in headless mode.
+- Unused plan flags become non-fatal warnings.
+- Warnings appear in metadata and status files.
+
+## Milestone 7 Progress
+
+- [x] Approval helper tests written.
+- [x] Run-level unused warning test written.
+- [x] Approval handler implemented.
+- [x] Run-level warnings implemented.
+- [x] Focused tests pass.
+- [x] Typecheck passes.
+- [x] Build passes.
+- [x] Real `--approve-plan` unused-warning smoke run passes.
+- [x] Self-contained commit created.
+
 ## Later Milestones
 
 - [x] Status, output, output-file, control, and approval helpers.
@@ -157,6 +182,7 @@ This milestone shall cover:
 - [x] Headless status and goal-control commands.
 - [x] One-turn prompt-backed headless run execution.
 - [x] Goal-backed multi-turn execution and file output.
+- [x] Fail-safe plan approval flags.
 - [ ] Docs and changeset.
 - [ ] Build CLI and run manual headless trials.
 - [ ] Three example projects under `~/Developer/@kimi-examples/`.

@@ -32,6 +32,7 @@ import {
   writeHeadlessRunStatus,
 } from './status-file';
 import { createKimiCodeHostIdentity } from '../version';
+import { createHeadlessApprovalHandler, getUnusedPlanFlagWarning } from './approval';
 
 interface HeadlessOutput {
   write(chunk: string): boolean;
@@ -116,6 +117,7 @@ interface RunContext {
   currentTurnMarkdown: string;
   turnResponses: Array<{ readonly turnId: number | null; readonly markdown: string }>;
   goalTerminal: boolean;
+  planApprovalSeen: boolean;
 }
 
 interface GoalSnapshotLike {
@@ -201,7 +203,6 @@ async function runHeadlessRun(
       command: 'headless run',
     });
     const session = resolved.session;
-    installHeadlessRunHandlers(session);
     const context = createRunContext({
       runId,
       startedAtMs,
@@ -214,6 +215,7 @@ async function runHeadlessRun(
       goalMode,
       sessionId: session.id,
     });
+    installHeadlessRunHandlers(session, options, context);
     if (goalMode) {
       await session.createGoal({
         objective: prompt,
@@ -231,12 +233,26 @@ async function runHeadlessRun(
     }
     await writeRunStatus(context, 'starting');
     await runHeadlessPromptTurn(session, prompt, context);
+    recordUnusedPlanFlagWarning(context, options);
     await writeCurrentRunStatus(context);
     await finalizeHeadlessRun(context, stdout);
   } finally {
     await lock?.release();
     await harness.close();
   }
+}
+
+function recordUnusedPlanFlagWarning(context: RunContext, options: HeadlessRunOptions): void {
+  const warning = getUnusedPlanFlagWarning({
+    approvePlan: options.approvePlan,
+    rejectPlan: options.rejectPlan,
+    planApprovalSeen: context.planApprovalSeen,
+  });
+  if (warning === null) return;
+  context.status = {
+    ...context.status,
+    warnings: [...context.status.warnings, warning],
+  };
 }
 
 async function resolveHeadlessSession(
@@ -297,8 +313,22 @@ async function resolveHeadlessSession(
   return { session, sessionDir, workDir: initialWorkDir, model };
 }
 
-function installHeadlessRunHandlers(session: HeadlessSession): void {
-  session.setApprovalHandler(() => ({ decision: 'approved' }));
+function installHeadlessRunHandlers(
+  session: HeadlessSession,
+  options: HeadlessRunOptions,
+  context: RunContext,
+): void {
+  session.setApprovalHandler(
+    createHeadlessApprovalHandler({
+      approvePlan: options.approvePlan,
+      rejectPlan: options.rejectPlan,
+      onPlanApprovalRequired: (approval) => {
+        context.planApprovalSeen = true;
+        context.status = { ...context.status, approval };
+        updateRunStatus(context, 'approval_required', 'approval.required');
+      },
+    }),
+  );
   session.setQuestionHandler(() => null);
 }
 
@@ -338,6 +368,7 @@ function createRunContext(input: {
     currentTurnMarkdown: '',
     turnResponses: [],
     goalTerminal: false,
+    planApprovalSeen: false,
     status: {
       schemaVersion: 1,
       runId: input.runId,

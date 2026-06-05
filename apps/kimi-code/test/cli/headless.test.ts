@@ -5,7 +5,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createProgram } from '#/cli/commands';
-import { getUnusedPlanFlagWarning } from '#/cli/headless/approval';
+import {
+  createHeadlessApprovalHandler,
+  getUnusedPlanFlagWarning,
+} from '#/cli/headless/approval';
 import type { HeadlessCommand } from '#/cli/headless/commands';
 import {
   readHeadlessControlRequest,
@@ -701,6 +704,58 @@ describe('headless control files', () => {
 });
 
 describe('headless approval warnings', () => {
+  const planApprovalRequest = {
+    toolCallId: 'call_plan',
+    toolName: 'ExitPlanMode',
+    action: 'ExitPlanMode',
+    display: {
+      kind: 'plan_review' as const,
+      plan: 'Do the work.',
+      options: [{ label: 'Option A', description: 'Use option A.' }],
+    },
+  };
+
+  it('approves or rejects plan approval requests from explicit flags', async () => {
+    const approvedSeen: unknown[] = [];
+    const approveHandler = createHeadlessApprovalHandler({
+      approvePlan: true,
+      rejectPlan: false,
+      onPlanApprovalRequired: (approval) => approvedSeen.push(approval),
+    });
+    expect(await approveHandler(planApprovalRequest)).toEqual({
+      decision: 'approved',
+      selectedLabel: 'Option A',
+    });
+    expect(approvedSeen).toEqual([
+      expect.objectContaining({
+        decision: 'approved',
+        decidedByFlag: 'approve-plan',
+      }),
+    ]);
+
+    const rejectHandler = createHeadlessApprovalHandler({
+      approvePlan: false,
+      rejectPlan: true,
+      onPlanApprovalRequired: () => {},
+    });
+    expect(await rejectHandler(planApprovalRequest)).toMatchObject({
+      decision: 'rejected',
+      selectedLabel: 'Reject and Exit',
+    });
+  });
+
+  it('cancels plan approval requests without an explicit flag', async () => {
+    const handler = createHeadlessApprovalHandler({
+      approvePlan: false,
+      rejectPlan: false,
+      onPlanApprovalRequired: () => {},
+    });
+
+    expect(handler(planApprovalRequest)).toMatchObject({
+      decision: 'cancelled',
+    });
+  });
+
   it('records unused plan flags as non-fatal warnings', () => {
     expect(
       getUnusedPlanFlagWarning({
@@ -999,6 +1054,52 @@ describe('runHeadless prompt run command', () => {
     expect(output).toMatchObject({
       responseFormat: 'omitted',
       responseOmitted: true,
+    });
+  });
+
+  it('continues and records a warning when --approve-plan is unused', async () => {
+    const dir = await createTempDir();
+    const statusFile = path.join(dir, 'status.json');
+    const runtime = createFakeHeadlessRuntime();
+    const stdout = outputWriter();
+
+    await runHeadless(
+      {
+        kind: 'run',
+        options: {
+          prompt: 'inspect',
+          cwd: '/repo',
+          continue: false,
+          statusFile,
+          metadataOnly: true,
+          approvePlan: true,
+          rejectPlan: false,
+          skillsDirs: [],
+        },
+      },
+      '1.2.3-test',
+      {
+        stdout,
+        createHarness: () => runtime.harness,
+        acquireSessionRunLock: runtime.acquireLock,
+      },
+    );
+
+    const metadata = JSON.parse(stdout.text());
+    expect(metadata.warnings).toEqual([
+      {
+        code: 'PLAN_FLAG_UNUSED',
+        message: '--approve-plan was set, but no plan approval was requested.',
+      },
+    ]);
+    await expect(readHeadlessRunStatus(statusFile)).resolves.toMatchObject({
+      state: 'completed',
+      warnings: [
+        {
+          code: 'PLAN_FLAG_UNUSED',
+          message: '--approve-plan was set, but no plan approval was requested.',
+        },
+      ],
     });
   });
 
