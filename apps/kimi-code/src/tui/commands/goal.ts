@@ -13,6 +13,7 @@ import {
 import {
   GoalSetMessageComponent,
   GoalStatusMessageComponent,
+  UpcomingGoalAddedMessageComponent,
 } from '../components/messages/goal-panel';
 import { LLM_NOT_SET_MESSAGE } from '../constant/kimi-tui';
 import {
@@ -203,7 +204,10 @@ async function queueNextGoal(
     return;
   }
   host.track('goal_queue_append');
-  host.showStatus('Upcoming goal added. It will start after the current goal is complete.');
+  host.state.transcriptContainer.addChild(
+    new UpcomingGoalAddedMessageComponent(host.state.theme.colors),
+  );
+  host.state.ui.requestRender();
 }
 
 async function showGoalQueueManager(

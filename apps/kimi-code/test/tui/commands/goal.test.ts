@@ -451,9 +451,15 @@ describe('handleGoalCommand', () => {
       objective: 'Ship release notes',
     });
     expect(host.track).toHaveBeenCalledWith('goal_queue_append');
-    expect(host.showStatus).toHaveBeenCalledWith(
+    expect(host.showStatus).not.toHaveBeenCalledWith(
       'Upcoming goal added. It will start after the current goal is complete.',
     );
+    const addChild = host.state.transcriptContainer.addChild as ReturnType<typeof vi.fn>;
+    const message = addChild.mock.calls[0]?.[0] as { render(width: number): string[] };
+    expect(stripAnsi(message.render(80).join('\n'))).toBe(
+      '\n● Upcoming goal added. It will start after the current goal is complete.',
+    );
+    expect(host.state.ui.requestRender).toHaveBeenCalled();
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
     expect(session.createGoal).not.toHaveBeenCalled();
   });
