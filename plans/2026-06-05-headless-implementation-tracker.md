@@ -74,13 +74,35 @@ This milestone shall cover:
 - [x] Build passes.
 - [x] Self-contained commit created.
 
+## Current Milestone 4
+
+Wire headless status and goal-control commands.
+
+This milestone shall cover:
+
+- `runHeadless` status dispatch.
+- Human status summary output.
+- Raw status JSON output.
+- Goal control request writes through `status.control.path`.
+- Fail-safe rejection when a status file has no control path.
+
+## Milestone 4 Progress
+
+- [x] Command behavior tests written.
+- [x] Command behavior tests fail for the stub.
+- [x] Status and goal-control commands implemented.
+- [x] Focused tests pass.
+- [x] Typecheck passes.
+- [x] Build passes.
+- [x] Self-contained commit created.
+
 ## Later Milestones
 
 - [x] Status, output, output-file, control, and approval helpers.
-- [ ] SDK session lock helper.
+- [x] SDK session lock helper.
+- [x] Headless status and goal-control commands.
 - [ ] Headless run execution.
 - [ ] Goal-backed multi-turn execution and file output.
-- [ ] Headless status command.
 - [ ] Docs and changeset.
 - [ ] Build CLI and run manual headless trials.
 - [ ] Three example projects under `~/Developer/@kimi-examples/`.

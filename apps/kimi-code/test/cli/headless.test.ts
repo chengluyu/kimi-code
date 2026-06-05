@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createProgram } from '#/cli/commands';
 import { getUnusedPlanFlagWarning } from '#/cli/headless/approval';
@@ -24,6 +24,7 @@ import {
   type HeadlessRunStatus,
   writeHeadlessRunStatus,
 } from '#/cli/headless/status-file';
+import { runHeadless } from '#/cli/headless/run';
 
 const tempDirs: string[] = [];
 
@@ -73,6 +74,17 @@ function createStatus(overrides: Partial<HeadlessRunStatus> = {}): HeadlessRunSt
     error: null,
     resumeCommand: 'kimi -r ses_test',
     ...overrides,
+  };
+}
+
+function outputWriter() {
+  let text = '';
+  return {
+    write: vi.fn((chunk: string) => {
+      text += chunk;
+      return true;
+    }),
+    text: () => text,
   };
 }
 
@@ -583,5 +595,169 @@ describe('headless approval warnings', () => {
         planApprovalSeen: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe('runHeadless status command', () => {
+  it('prints a compact human status summary', async () => {
+    const dir = await createTempDir();
+    const file = path.join(dir, 'status.json');
+    await writeHeadlessRunStatus(
+      file,
+      createStatus({
+        sessionId: 'ses_123',
+        turnId: 7,
+        updatedAt: '2026-06-05T00:00:05.000Z',
+        activeTool: {
+          toolCallId: 'call_123',
+          name: 'functions.exec_command',
+          description: 'Run tests',
+        },
+        summary: {
+          turnStepCount: 2,
+          toolCallCount: 3,
+          completedToolCallCount: 2,
+          failedToolCallCount: 0,
+          assistantCharCount: 25,
+          thinkingCharCount: 10,
+        },
+      }),
+    );
+    const stdout = outputWriter();
+
+    await runHeadless({ kind: 'status', options: { file, json: false } }, '1.2.3-test', {
+      stdout,
+    });
+
+    expect(stdout.text()).toBe(
+      'running - session ses_123 - turn 7 - tools 2/3 - tool functions.exec_command - updated 2026-06-05T00:00:05.000Z\n',
+    );
+  });
+
+  it('prints raw status JSON', async () => {
+    const dir = await createTempDir();
+    const file = path.join(dir, 'status.json');
+    const status = createStatus({ state: 'completed' });
+    await writeHeadlessRunStatus(file, status);
+    const stdout = outputWriter();
+
+    await runHeadless({ kind: 'status', options: { file, json: true } }, '1.2.3-test', {
+      stdout,
+    });
+
+    expect(JSON.parse(stdout.text())).toEqual(status);
+  });
+
+  it('includes approval, goal, file, and control details in human status', async () => {
+    const dir = await createTempDir();
+    const file = path.join(dir, 'status.json');
+    await writeHeadlessRunStatus(
+      file,
+      createStatus({
+        state: 'approval_required',
+        approval: {
+          kind: 'plan',
+          decision: 'required',
+          decidedByFlag: null,
+          message: 'rerun with --approve-plan or --reject-plan',
+        },
+        goal: {
+          goalId: 'goal_123',
+          status: 'complete',
+          reason: null,
+          turnsUsed: 3,
+          tokensUsed: 12000,
+          wallClockMs: 60000,
+        },
+        files: {
+          outputDir: '/tmp/kimi-run',
+          responses: [
+            {
+              turnIndex: 1,
+              turnId: 7,
+              path: '/tmp/kimi-run/turns/turn-0001.md',
+              state: 'completed',
+              bytes: 12,
+              updatedAt: '2026-06-05T00:00:05.000Z',
+            },
+          ],
+          finalResponse: null,
+          goalStatus: null,
+        },
+        control: {
+          path: path.join(dir, 'control.json'),
+          supportedActions: ['pause_goal', 'cancel_goal', 'interrupt'],
+          lastRequest: {
+            schemaVersion: 1,
+            runId: 'run_test',
+            commandId: 'cmd_001',
+            action: 'pause_goal',
+            requestedAt: '2026-06-05T00:00:02.000Z',
+          },
+          lastApplied: null,
+        },
+      }),
+    );
+    const stdout = outputWriter();
+
+    await runHeadless({ kind: 'status', options: { file, json: false } }, '1.2.3-test', {
+      stdout,
+    });
+
+    expect(stdout.text()).toContain(
+      'approval required - plan - rerun with --approve-plan or --reject-plan',
+    );
+    expect(stdout.text()).toContain('goal complete - turns 3 - tokens 12000');
+    expect(stdout.text()).toContain('files 1 - output /tmp/kimi-run');
+    expect(stdout.text()).toContain('control pending - pause_goal - command cmd_001');
+  });
+});
+
+describe('runHeadless goal control command', () => {
+  it('writes a goal control request to the status control path', async () => {
+    const dir = await createTempDir();
+    const statusFile = path.join(dir, 'status.json');
+    const controlFile = path.join(dir, 'control.json');
+    await writeHeadlessRunStatus(
+      statusFile,
+      createStatus({
+        control: {
+          path: controlFile,
+          supportedActions: ['pause_goal', 'cancel_goal', 'interrupt'],
+          lastRequest: null,
+          lastApplied: null,
+        },
+      }),
+    );
+    const stdout = outputWriter();
+
+    await runHeadless(
+      { kind: 'goal-control', options: { action: 'pause_goal', file: statusFile, wait: false } },
+      '1.2.3-test',
+      { stdout },
+    );
+
+    const request = await readHeadlessControlRequest(controlFile);
+    expect(request).toMatchObject({
+      schemaVersion: 1,
+      runId: 'run_test',
+      action: 'pause_goal',
+      commandId: expect.any(String),
+      requestedAt: expect.any(String),
+    });
+    expect(stdout.text()).toMatch(/^control pending - pause_goal - command .+\n$/);
+  });
+
+  it('rejects goal control when the status file has no control path', async () => {
+    const dir = await createTempDir();
+    const statusFile = path.join(dir, 'status.json');
+    await writeHeadlessRunStatus(statusFile, createStatus());
+
+    await expect(
+      runHeadless(
+        { kind: 'goal-control', options: { action: 'pause_goal', file: statusFile, wait: false } },
+        '1.2.3-test',
+      ),
+    ).rejects.toThrow('Status file does not contain a control path.');
   });
 });
