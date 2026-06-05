@@ -13,6 +13,8 @@ const ANSI = /\u001B\[[0-9;]*m/g;
 const strip = (s: string): string => s.replaceAll(ANSI, '');
 const ESC = String.fromCodePoint(27);
 const CTRL_J = '\u001B[106;5u';
+const BRACKET_PASTE_START = '\u001B[200~';
+const BRACKET_PASTE_END = '\u001B[201~';
 const UP = `${ESC}[A`;
 const DOWN = `${ESC}[B`;
 
@@ -166,6 +168,20 @@ describe('GoalQueueManagerComponent', () => {
       }
     }
   });
+
+  it('renders multiline objectives as a single selectable row', () => {
+    const manager = new GoalQueueManagerComponent({
+      goals: [goal('g1', 'First line\nSecond line')],
+      colors: darkColors,
+      onAction: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const lines = manager.render(100).map(strip);
+
+    expect(lines.some((line) => line.includes('❯ 1. First line Second line'))).toBe(true);
+    expect(lines.some((line) => line.trim() === 'Second line')).toBe(false);
+  });
 });
 
 describe('GoalQueueEditDialogComponent', () => {
@@ -203,6 +219,26 @@ describe('GoalQueueEditDialogComponent', () => {
       kind: 'save',
       goalId: 'g1',
       objective: 'Ship queued goal\nwith a second line',
+    });
+  });
+
+  it('sanitizes bracketed paste while preserving newlines', () => {
+    const onDone = vi.fn();
+    const dialog = new GoalQueueEditDialogComponent({
+      goal: goal('g1', 'Ship queued goal'),
+      colors: darkColors,
+      onDone,
+    });
+
+    dialog.handleInput(
+      `${BRACKET_PASTE_START} \u001B[31mred\u001B[0m\nnext\u0007 line${BRACKET_PASTE_END}`,
+    );
+    dialog.handleInput('\r');
+
+    expect(onDone).toHaveBeenCalledWith({
+      kind: 'save',
+      goalId: 'g1',
+      objective: 'Ship queued goal red\nnext line',
     });
   });
 

@@ -659,6 +659,16 @@ export class SessionEventHandler {
     this.queuedGoalPromotionTimer = undefined;
   }
 
+  requestQueuedGoalPromotion(): void {
+    this.queuedGoalPromotionPending = true;
+    this.goalCompletionTurnEnded = true;
+    this.scheduleQueuedGoalPromotion();
+  }
+
+  retryQueuedGoalPromotion(): void {
+    this.scheduleQueuedGoalPromotion();
+  }
+
   private isReadyForQueuedGoalPromotion(session?: Session): boolean {
     return (
       (session === undefined || this.host.session === session) &&

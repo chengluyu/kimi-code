@@ -125,6 +125,7 @@ function makeHost(
     restoreEditor: vi.fn(),
     restoreInputText: vi.fn(),
     sendNormalUserInput: vi.fn(),
+    requestQueuedGoalPromotion: vi.fn(),
     cancelInFlight: vi.fn(),
     track: vi.fn(),
   } as unknown as SlashCommandHost;
@@ -476,6 +477,20 @@ describe('handleGoalCommand', () => {
       'No active goal. Starting this goal now.',
     );
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('Ship release notes');
+  });
+
+  it('/goal next queues instead of starting immediately while streaming with no current goal', async () => {
+    const { host: streamingHost, session: s } = makeHost({ streaming: true });
+
+    await handleGoalCommand(streamingHost, 'next Ship release notes');
+
+    expect(s.getGoal).toHaveBeenCalledOnce();
+    expect(appendGoalQueueItem).toHaveBeenCalledWith(s, {
+      objective: 'Ship release notes',
+    });
+    expect(streamingHost.requestQueuedGoalPromotion).toHaveBeenCalledOnce();
+    expect(s.createGoal).not.toHaveBeenCalled();
+    expect(streamingHost.sendNormalUserInput).not.toHaveBeenCalled();
   });
 
   it('/goal next follows the normal goal-start prompt when there is no current goal', async () => {

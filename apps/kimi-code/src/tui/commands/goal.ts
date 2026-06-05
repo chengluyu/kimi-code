@@ -187,7 +187,7 @@ async function queueNextGoal(
     return;
   }
 
-  if (!hasCurrentGoal) {
+  if (!hasCurrentGoal && !isBusy(host)) {
     host.showStatus(START_NEXT_GOAL_NOW_MESSAGE);
     await createGoal(
       host,
@@ -204,6 +204,7 @@ async function queueNextGoal(
     return;
   }
   host.track('goal_queue_append');
+  if (!hasCurrentGoal) host.requestQueuedGoalPromotion?.();
   host.state.transcriptContainer.addChild(
     new UpcomingGoalAddedMessageComponent(host.state.theme.colors),
   );
@@ -495,4 +496,8 @@ async function showGoalStatus(host: SlashCommandHost): Promise<void> {
 
 function isStreaming(host: SlashCommandHost): boolean {
   return host.state.appState.streamingPhase !== 'idle';
+}
+
+function isBusy(host: SlashCommandHost): boolean {
+  return isStreaming(host) || host.state.appState.isCompacting;
 }

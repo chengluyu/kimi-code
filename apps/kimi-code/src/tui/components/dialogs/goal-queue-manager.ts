@@ -27,6 +27,8 @@ const BRACKET_PASTE_END = '\u001B[201~';
 const SHIFT_ENTER_LEGACY = '\u001B\r';
 const SHIFT_ENTER_CSI = '\u001B[13;2~';
 const SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+// oxlint-disable-next-line no-control-regex -- ESC (\x1b) is required to strip pasted terminal control sequences
+const ANSI_CSI = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 
 export type GoalQueueManagerAction =
   | {
@@ -156,7 +158,11 @@ export class GoalQueueManagerComponent extends Container implements Focusable {
     const labelWidth = visibleWidth(labelPrefix);
     const stateWidth = visibleWidth(stateLabel);
     const objectiveWidth = Math.max(1, width - 5 - labelWidth - stateWidth);
-    const objective = truncateToWidth(goal.objective, objectiveWidth, ELLIPSIS);
+    const objective = truncateToWidth(
+      formatListObjective(goal.objective),
+      objectiveWidth,
+      ELLIPSIS,
+    );
     const textStyle = selected ? chalk.hex(colors.primary).bold : chalk.hex(colors.text);
     let line = prefix + textStyle(labelPrefix + objective);
     if (moving) line += chalk.hex(colors.success)(stateLabel);
@@ -478,7 +484,7 @@ class MultilineGoalInput {
     const pasted = this.pasteBuffer.slice(0, end);
     const remaining = this.pasteBuffer.slice(end + BRACKET_PASTE_END.length);
     this.pasteBuffer = undefined;
-    this.insert(pasted);
+    this.insert(sanitizePastedText(pasted));
     if (remaining.length > 0) this.handleInput(remaining);
   }
 }
@@ -494,6 +500,25 @@ function isNewlineInput(data: string): boolean {
 
 function normalizeNewlines(text: string): string {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+}
+
+function formatListObjective(objective: string): string {
+  return objective.replaceAll(/\s+/g, ' ').trim();
+}
+
+function sanitizePastedText(text: string): string {
+  const normalized = normalizeNewlines(text).replaceAll(ANSI_CSI, '');
+  let out = '';
+  for (let i = 0; i < normalized.length;) {
+    const code = normalized.codePointAt(i);
+    if (code === undefined) break;
+    const char = String.fromCodePoint(code);
+    if (char === '\n' || isPrintableText(char)) {
+      out += char;
+    }
+    i += code > 0xffff ? 2 : 1;
+  }
+  return out;
 }
 
 function isPrintableText(text: string): boolean {
