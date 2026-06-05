@@ -116,6 +116,8 @@ Write stop conditions into the objective. `/goal` does not have a separate stop-
 
 ## Queue upcoming goals
 
+Agents sometimes complete a goal too quickly. Users can be disappointed that they can assign only one goal at a time. Many people already know the upcoming goals they want to pursue. They had to wait for the current goal to complete, open the TUI, and submit the next goal manually.
+
 Use `/goal next` when you have more work ready but do not want to interrupt the current goal:
 
 ```sh
