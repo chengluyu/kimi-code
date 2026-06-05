@@ -175,6 +175,29 @@ This milestone shall cover:
 - [x] Real `--approve-plan` unused-warning smoke run passes.
 - [x] Self-contained commit created.
 
+## Current Milestone 8
+
+Document headless mode and add the changeset.
+
+This milestone shall cover:
+
+- English command reference.
+- Chinese command reference.
+- Changeset for the CLI, SDK, and agent-core package changes.
+- Plan correction for graceful goal pause semantics.
+
+## Milestone 8 Progress
+
+- [x] English command reference updated.
+- [x] Chinese command reference updated.
+- [x] Graceful pause plan wording amended.
+- [x] Changeset written.
+- [x] Focused tests pass.
+- [x] Typecheck passes.
+- [x] Build passes.
+- [x] Docs build passes with the repo pnpm environment.
+- [ ] Self-contained commit created.
+
 ## Later Milestones
 
 - [x] Status, output, output-file, control, and approval helpers.
@@ -183,7 +206,7 @@ This milestone shall cover:
 - [x] One-turn prompt-backed headless run execution.
 - [x] Goal-backed multi-turn execution and file output.
 - [x] Fail-safe plan approval flags.
-- [ ] Docs and changeset.
+- [x] Docs and changeset.
 - [ ] Build CLI and run manual headless trials.
 - [ ] Three example projects under `~/Developer/@kimi-examples/`.
 - [ ] Reports with DOs and DONTs.

@@ -442,9 +442,10 @@ Control request writes shall be atomic:
 `pause_goal` behavior:
 
 - Record the request in `control.lastRequest`.
-- Let the current turn finish.
+- Apply the pause request when the control file is read.
+- Let the current turn keep running.
 - Do not call `session.cancel()` for this action.
-- Before scheduling the next goal turn, call `session.pauseGoal()`.
+- Do not schedule another goal turn after the current turn ends.
 - Write final status with `state: "paused"`.
 - Leave the goal resumable.
 - Exit with the existing paused goal exit code.
