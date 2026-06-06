@@ -544,6 +544,18 @@ describe('headless status files', () => {
     await expect(stat(`${file}.tmp`)).rejects.toThrow();
   });
 
+  it('recreates the status file parent if it is deleted during a run', async () => {
+    const dir = await createTempDir();
+    const file = path.join(dir, 'status.json');
+    const status = createStatus();
+
+    await preflightHeadlessStatusFile(file);
+    await rm(dir, { recursive: true, force: true });
+    await writeHeadlessRunStatus(file, status);
+
+    await expect(readHeadlessRunStatus(file)).resolves.toEqual(status);
+  });
+
   it('preflights status files before a run starts', async () => {
     const dir = await createTempDir();
     await expect(preflightHeadlessStatusFile(path.join(dir, 'status.json'))).resolves.toBeUndefined();
@@ -660,6 +672,31 @@ describe('headless output files', () => {
     });
     await expect(readFile(responseFile.path, 'utf8')).resolves.toBe('model markdown\n');
     await expect(stat(`${responseFile.path}.tmp`)).rejects.toThrow();
+    expect(goalFile).toMatchObject({
+      path: path.join(outputDir, 'goal-status.json'),
+      state: 'completed',
+    });
+    await expect(readFile(goalFile.path, 'utf8')).resolves.toContain('"goalId": "goal_123"');
+  });
+
+  it('recreates the output directory if it is deleted during a run', async () => {
+    const outputDir = await createTempDir();
+
+    await preflightHeadlessOutputDir(outputDir);
+    await rm(outputDir, { recursive: true, force: true });
+    const goalFile = await writeHeadlessGoalStatusFile({
+      outputDir,
+      goal: {
+        goalId: 'goal_123',
+        status: 'complete',
+        reason: 'done',
+        turnsUsed: 1,
+        tokensUsed: 100,
+        wallClockMs: 5000,
+      },
+      updatedAt: '2026-06-05T00:00:02.000Z',
+    });
+
     expect(goalFile).toMatchObject({
       path: path.join(outputDir, 'goal-status.json'),
       state: 'completed',

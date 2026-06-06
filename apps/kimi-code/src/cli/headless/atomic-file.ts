@@ -1,6 +1,8 @@
-import { open, rename } from 'node:fs/promises';
+import { mkdir, open, rename } from 'node:fs/promises';
+import path from 'node:path';
 
 export async function writeAtomicTextFile(filePath: string, text: string): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.tmp`;
   const handle = await open(tempPath, 'w');
   try {
