@@ -460,7 +460,6 @@ async function resumeGoal(host: SlashCommandHost): Promise<void> {
     return;
   }
   host.track('goal_resume');
-  host.showStatus('Goal resumed.');
   host.sendNormalUserInput(RESUME_GOAL_INPUT);
 }
 
