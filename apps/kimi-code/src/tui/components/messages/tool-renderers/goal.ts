@@ -1,6 +1,7 @@
 import { Text } from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 
+import { STATUS_BULLET } from '#/tui/constant/symbols';
 import type { ColorPalette } from '#/tui/theme/colors';
 import type { ToolCallBlockData, ToolResultBlockData } from '#/tui/types';
 import { formatTokenCount } from '#/utils/usage/usage-format';
@@ -57,12 +58,16 @@ export function buildGoalToolHeader(options: {
 
   const tone = result?.is_error === true ? colors.error : colors.primary;
   const label = chalk.hex(tone).bold(goalToolLabel(toolCall.name, result, toolCall.args));
+  const marker =
+    toolCall.name === 'UpdateGoal' && result !== undefined && result.is_error !== true
+      ? chalk.hex(colors.primary)(STATUS_BULLET)
+      : bullet;
   const arg =
     toolCall.name === 'UpdateGoal'
       ? undefined
       : formatGoalToolArgument(toolCall.name, toolCall.args);
   const argText = arg === undefined ? '' : chalk.hex(colors.textDim)(` (${arg})`);
-  return `${bullet}${label}${argText}${chip}`;
+  return `${marker}${label}${argText}${chip}`;
 }
 
 export function formatGoalBudgetArg(args: Record<string, unknown>): string | undefined {

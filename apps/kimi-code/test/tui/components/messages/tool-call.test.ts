@@ -1,4 +1,5 @@
 import type { TUI } from '@earendil-works/pi-tui';
+import chalk from 'chalk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ToolCallComponent } from '#/tui/components/messages/tool-call';
@@ -575,6 +576,34 @@ describe('ToolCallComponent', () => {
     expect(out).not.toContain('· blocked');
     expect(out).not.toContain('Goal marked blocked.');
     expect(out).not.toContain('● Goal blocked');
+  });
+
+  it('renders successful UpdateGoal report headers entirely in the primary goal color', () => {
+    const previousLevel = chalk.level;
+    chalk.level = 3;
+    try {
+      for (const status of ['complete', 'blocked']) {
+        const component = new ToolCallComponent(
+          {
+            id: `call_update_goal_${status}`,
+            name: 'UpdateGoal',
+            args: { status },
+          },
+          {
+            tool_call_id: `call_update_goal_${status}`,
+            output: `Goal marked ${status}.`,
+            is_error: false,
+          },
+          darkColors,
+        );
+
+        const out = component.render(100).join('\n');
+        expect(out).toContain(chalk.hex(darkColors.primary)(STATUS_BULLET));
+        expect(out).not.toContain(chalk.hex(darkColors.success)(STATUS_BULLET));
+      }
+    } finally {
+      chalk.level = previousLevel;
+    }
   });
 
   it('appends a chip to the header once a result arrives', () => {
