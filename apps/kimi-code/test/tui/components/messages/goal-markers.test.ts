@@ -19,6 +19,24 @@ describe('buildGoalMarker', () => {
     expect(strip(blocked!.render(80))).toContain('Goal blocked');
   });
 
+  it('renders user interruption pause and user resume as prominent markers', () => {
+    const paused = buildGoalMarker(
+      { kind: 'lifecycle', status: 'paused', reason: 'Paused after interruption' } as GoalChange,
+      darkColors,
+      false,
+      'runtime',
+    );
+    const resumed = buildGoalMarker(
+      { kind: 'lifecycle', status: 'active' } as GoalChange,
+      darkColors,
+      false,
+      'user',
+    );
+
+    expect(strip(paused!.render(80))).toBe("● Goal paused due to user's interruption");
+    expect(strip(resumed!.render(80))).toBe('● Goal resumed by the user.');
+  });
+
   it('returns null for a completion change (it posts its own message)', () => {
     expect(
       buildGoalMarker({ kind: 'completion', status: 'complete' } as GoalChange, darkColors, false),

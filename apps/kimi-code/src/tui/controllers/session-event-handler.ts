@@ -600,7 +600,12 @@ export class SessionEventHandler {
       void this.notifyQueuedGoalWaitingOnBlocked();
       if (event.snapshot?.updatedBy === 'model') return;
     }
-    const marker = buildGoalMarker(change, state.theme.colors, state.toolOutputExpanded);
+    const marker = buildGoalMarker(
+      change,
+      state.theme.colors,
+      state.toolOutputExpanded,
+      event.snapshot?.updatedBy,
+    );
     if (marker !== null) {
       state.transcriptContainer.addChild(marker);
       state.ui.requestRender();
