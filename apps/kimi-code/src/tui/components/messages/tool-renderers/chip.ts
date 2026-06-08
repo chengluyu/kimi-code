@@ -11,7 +11,7 @@
 import { computeDiffLines } from '#/tui/components/media/diff-preview';
 import type { ToolCallBlockData, ToolResultBlockData } from '#/tui/types';
 
-import { formatGoalBudgetArg, goalStatusChip } from './goal';
+import { goalStatusChip } from './goal';
 import { readMediaChip } from './media';
 import { strArg } from './types';
 
@@ -114,9 +114,6 @@ const webSearchChip: ChipProvider = (_toolCall, result) => {
 const goalStatusOutputChip: ChipProvider = (_toolCall, result) =>
   result.is_error ? '' : goalStatusChip(result.output);
 
-const goalBudgetChip: ChipProvider = (toolCall, result) =>
-  result.is_error ? '' : (formatGoalBudgetArg(toolCall.args) ?? '');
-
 const REGISTRY: Record<string, ChipProvider> = {
   Edit: editChip,
   Write: writeChip,
@@ -128,7 +125,6 @@ const REGISTRY: Record<string, ChipProvider> = {
   WebSearch: webSearchChip,
   CreateGoal: goalStatusOutputChip,
   GetGoal: goalStatusOutputChip,
-  SetGoalBudget: goalBudgetChip,
 };
 
 export function pickChip(toolName: string): ChipProvider | undefined {

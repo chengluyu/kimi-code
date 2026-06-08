@@ -92,10 +92,8 @@ describe('chip registry', () => {
     expect(chipFor('CreateGoal', { objective: 'Ship feature X' }, result('{"goal":{"status":"active"}}'))).toBe('active');
   });
 
-  it('SetGoalBudget chip shows the configured budget', () => {
-    expect(chipFor('SetGoalBudget', { value: 10, unit: 'turns' }, result('Goal budget set.'))).toBe(
-      '10 turns',
-    );
+  it('SetGoalBudget has no chip because the budget is in the header argument', () => {
+    expect(pickChip('SetGoalBudget')).toBeUndefined();
   });
 
   it('UpdateGoal has no chip because the status is in the header label', () => {

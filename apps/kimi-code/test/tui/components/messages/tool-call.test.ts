@@ -551,6 +551,7 @@ describe('ToolCallComponent', () => {
 
     const out = strip(component.render(100).join('\n'));
     expect(out).toContain('Set goal budget (10 turns)');
+    expect(out).not.toContain('Set goal budget (10 turns) · 10 turns');
     expect(out).not.toContain('Used SetGoalBudget (turns)');
     expect(out).not.toContain('Goal budget set: 10 turns.');
   });
