@@ -24,6 +24,7 @@ interface GoalMarkerOptions {
   readonly textHex?: string;
   readonly expandable?: boolean;
   readonly indent?: string;
+  readonly leadingBlank?: boolean;
 }
 
 export class GoalMarkerComponent implements Component {
@@ -32,6 +33,7 @@ export class GoalMarkerComponent implements Component {
   private readonly textHex: string;
   private readonly expandable: boolean;
   private readonly indent: string;
+  private readonly leadingBlank: boolean;
 
   constructor(
     private readonly headline: string,
@@ -44,6 +46,7 @@ export class GoalMarkerComponent implements Component {
     this.textHex = options.textHex ?? colors.textDim;
     this.expandable = options.expandable ?? true;
     this.indent = options.indent ?? HEAD_INDENT;
+    this.leadingBlank = options.leadingBlank ?? false;
   }
 
   invalidate(): void {}
@@ -56,20 +59,26 @@ export class GoalMarkerComponent implements Component {
     const dot = chalk.hex(this.accentHex)(this.marker);
     const head = chalk.hex(this.textHex)(this.headline);
     const hasDetail = this.detail !== undefined && this.detail.length > 0;
-    if (!hasDetail) return [`${this.indent}${dot} ${head}`];
+    if (!hasDetail) return this.withLeadingBlank([`${this.indent}${dot} ${head}`]);
 
     if (!this.expandable) {
-      return [`${this.indent}${dot} ${head}`];
+      return this.withLeadingBlank([`${this.indent}${dot} ${head}`]);
     }
     if (!this.expanded) {
-      return [`${this.indent}${dot} ${head} ${chalk.hex(this.colors.textMuted)('(ctrl+o)')}`];
+      return this.withLeadingBlank([
+        `${this.indent}${dot} ${head} ${chalk.hex(this.colors.textMuted)('(ctrl+o)')}`,
+      ]);
     }
     const out = [`${this.indent}${dot} ${head}`];
     const wrapWidth = Math.max(20, width - DETAIL_INDENT.length);
     for (const line of wrap(this.detail!, wrapWidth)) {
       out.push(DETAIL_INDENT + chalk.hex(this.colors.textDim)(line));
     }
-    return out;
+    return this.withLeadingBlank(out);
+  }
+
+  private withLeadingBlank(lines: string[]): string[] {
+    return this.leadingBlank ? ['', ...lines] : lines;
   }
 }
 
@@ -133,6 +142,7 @@ function prominentMarker(headline: string, accentHex: string) {
       textHex: accentHex,
       expandable: false,
       indent: '',
+      leadingBlank: true,
     },
   };
 }
