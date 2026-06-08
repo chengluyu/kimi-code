@@ -245,12 +245,14 @@ export class SessionReplayRenderer {
       this.renderCronMissed(context, message);
       return;
     }
-    const goalCompletion = goalCompletionFromSystemReminder(message);
-    if (goalCompletion !== null) {
-      this.flushAssistant(context);
-      this.host.appendTranscriptEntry(
-        replayEntry(context, 'assistant', goalCompletion, 'markdown'),
-      );
+    const goalReminder = goalOutcomeReminderFromSystemMessage(message);
+    if (goalReminder !== null) {
+      if (goalReminder !== undefined) {
+        this.flushAssistant(context);
+        this.host.appendTranscriptEntry(
+          replayEntry(context, 'assistant', goalReminder, 'markdown'),
+        );
+      }
       return;
     }
 
@@ -553,13 +555,18 @@ export class SessionReplayRenderer {
   }
 }
 
-function goalCompletionFromSystemReminder(message: ContextMessage): string | null {
-  if (message.origin?.kind !== 'system_trigger' || message.origin.name !== 'goal_completion') {
+function goalOutcomeReminderFromSystemMessage(message: ContextMessage): string | undefined | null {
+  if (message.origin?.kind !== 'system_trigger') return null;
+  if (message.origin.name !== 'goal_completion' && message.origin.name !== 'goal_blocked') {
     return null;
   }
   const text = contentPartsToText(message.content);
   const match = /^<system-reminder>\n([\s\S]*)\n<\/system-reminder>$/.exec(text);
-  return match?.[1] ?? text;
+  const reminder = match?.[1] ?? text;
+  if (message.origin.name === 'goal_completion' && reminder.trimStart().startsWith('✓ Goal complete')) {
+    return reminder;
+  }
+  return undefined;
 }
 
 function extractCronPrompt(text: string): string {

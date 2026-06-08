@@ -261,6 +261,44 @@ describe('KimiTUI resume message replay', () => {
     });
   });
 
+  it('does not replay model-facing goal completion prompts as transcript messages', async () => {
+    const driver = await replayIntoDriver([
+      message(
+        'user',
+        [
+          {
+            type: 'text',
+            text: '<system-reminder>\nGoal completed successfully.\nWorked 1 turn over 7m15s, using 4.3M tokens.\n\nWrite a concise final message for the user.\n</system-reminder>',
+          },
+        ],
+        { origin: { kind: 'system_trigger', name: 'goal_completion' } },
+      ),
+    ]);
+
+    const content = driver.state.transcriptEntries.map((item) => item.content).join('\n');
+    expect(content).not.toContain('Goal completed successfully');
+    expect(content).not.toContain('Write a concise final message for the user');
+  });
+
+  it('does not replay model-facing goal blocked prompts as transcript messages', async () => {
+    const driver = await replayIntoDriver([
+      message(
+        'user',
+        [
+          {
+            type: 'text',
+            text: '<system-reminder>\nGoal blocked.\nWorked 1 turn over 7m15s, using 4.3M tokens.\n\nWrite a concise final message for the user.\n</system-reminder>',
+          },
+        ],
+        { origin: { kind: 'system_trigger', name: 'goal_blocked' } },
+      ),
+    ]);
+
+    const content = driver.state.transcriptEntries.map((item) => item.content).join('\n');
+    expect(content).not.toContain('Goal blocked.');
+    expect(content).not.toContain('Write a concise final message for the user');
+  });
+
   it('groups replayed Agent calls from one assistant message using live grouping', async () => {
     const replay: AgentReplayRecord[] = [
       message('user', [{ type: 'text', text: 'run two agents' }]),
