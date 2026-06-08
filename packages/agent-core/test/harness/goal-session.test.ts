@@ -153,8 +153,8 @@ describe('goal session end-to-end', () => {
     // Terminal UpdateGoal asks the model for one final user-facing summary.
     expect(scripted.calls).toHaveLength(3);
     const summaryHistory = JSON.stringify(scripted.calls[2]?.history ?? []);
-    expect(summaryHistory).toContain('Goal complete.');
-    expect(summaryHistory).toContain('summarize how you completed the goal');
+    expect(summaryHistory).toContain('Goal completed successfully.');
+    expect(summaryHistory).toContain('Write a concise final message for the user');
     const lastContextMessage = agent.context.history.at(-1);
     expect(lastContextMessage?.role).toBe('assistant');
     expect(JSON.stringify(lastContextMessage?.content)).toContain(
@@ -232,7 +232,7 @@ describe('goal session end-to-end', () => {
     expect(scripted.calls.length).toBeGreaterThanOrEqual(4);
     expect(JSON.stringify(scripted.calls[0]?.history ?? [])).toContain('currently paused');
     expect(JSON.stringify(scripted.calls[2]?.history ?? [])).toContain('Continue working toward the active goal');
-    expect(JSON.stringify(scripted.calls[3]?.history ?? [])).toContain('summarize how you completed the goal');
+    expect(JSON.stringify(scripted.calls[3]?.history ?? [])).toContain('Write a concise final message for the user');
     expect(api.getGoal({}).goal).toBeNull();
   });
 
@@ -260,7 +260,7 @@ describe('goal session end-to-end', () => {
     expect(scripted.calls).toHaveLength(2);
     const reasonHistory = JSON.stringify(scripted.calls[1]?.history ?? []);
     expect(reasonHistory).toContain('Goal blocked.');
-    expect(reasonHistory).toContain('explain why the goal is blocked');
+    expect(reasonHistory).toContain('State that the goal is blocked');
     const lastContextMessage = agent.context.history.at(-1);
     expect(lastContextMessage?.role).toBe('assistant');
     expect(JSON.stringify(lastContextMessage?.content)).toContain(

@@ -17,9 +17,9 @@ export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
 
 export function buildGoalCompletionSummaryPrompt(goal: GoalSnapshot): string {
   return [
-    buildGoalCompletionMessage(goal),
+    buildGoalCompletionPromptMessage(goal),
     '',
-    'Now summarize how you completed the goal for the user. Mention the main work completed and any validation you ran. Do not call more goal tools.',
+    'Write a concise final message for the user. State that the goal is complete, summarize the main work completed, and mention any validation you ran. Do not call more goal tools.',
   ].join('\n');
 }
 
@@ -27,8 +27,15 @@ export function buildGoalBlockedReasonPrompt(goal: GoalSnapshot): string {
   return [
     buildGoalBlockedMessage(goal),
     '',
-    'Now explain why the goal is blocked for the user. Mention the concrete blocker and what input or change is needed before work can continue. Do not call more goal tools.',
+    'Write a concise final message for the user. State that the goal is blocked, explain the concrete blocker, and say what input or change is needed before work can continue. Do not call more goal tools.',
   ].join('\n');
+}
+
+function buildGoalCompletionPromptMessage(goal: GoalSnapshot): string {
+  const head = `Goal completed successfully${goal.terminalReason ? `: ${goal.terminalReason}` : ''}.`;
+  const turns = `${goal.turnsUsed} turn${goal.turnsUsed === 1 ? '' : 's'}`;
+  const stats = `Worked ${turns} over ${formatElapsed(goal.wallClockMs)}, using ${formatTokens(goal.tokensUsed)} tokens.`;
+  return `${head}\n${stats}`;
 }
 
 function buildGoalBlockedMessage(goal: GoalSnapshot): string {
