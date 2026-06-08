@@ -486,6 +486,97 @@ describe('ToolCallComponent', () => {
     expect(out).not.toContain('Collected your answers');
   });
 
+  it('renders GetGoal as a goal check without raw JSON', () => {
+    const component = new ToolCallComponent(
+      {
+        id: 'call_get_goal',
+        name: 'GetGoal',
+        args: {},
+      },
+      {
+        tool_call_id: 'call_get_goal',
+        output: JSON.stringify({
+          goal: {
+            goalId: 'g1',
+            objective: 'Ship feature X',
+            status: 'active',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            startedBy: 'model',
+            updatedBy: 'model',
+            turnsUsed: 1,
+            tokensUsed: 800,
+            wallClockMs: 5000,
+            budget: {
+              tokenBudget: null,
+              turnBudget: null,
+              wallClockBudgetMs: null,
+              remainingTokens: null,
+              remainingTurns: null,
+              remainingWallClockMs: null,
+              tokenBudgetReached: false,
+              turnBudgetReached: false,
+              wallClockBudgetReached: false,
+              overBudget: false,
+            },
+          },
+        }),
+        is_error: false,
+      },
+      darkColors,
+    );
+
+    const out = strip(component.render(100).join('\n'));
+    expect(out).toContain('Checked goal');
+    expect(out).toContain('Goal active: Ship feature X');
+    expect(out).not.toContain('Used GetGoal');
+    expect(out).not.toContain('"objective"');
+  });
+
+  it('renders SetGoalBudget with a readable budget argument', () => {
+    const component = new ToolCallComponent(
+      {
+        id: 'call_goal_budget',
+        name: 'SetGoalBudget',
+        args: { value: 10, unit: 'turns' },
+      },
+      {
+        tool_call_id: 'call_goal_budget',
+        output: 'Goal budget set: 10 turns.',
+        is_error: false,
+      },
+      darkColors,
+    );
+
+    const out = strip(component.render(100).join('\n'));
+    expect(out).toContain('Set goal budget (10 turns)');
+    expect(out).not.toContain('Used SetGoalBudget (turns)');
+    expect(out).not.toContain('Goal budget set: 10 turns.');
+  });
+
+  it('renders UpdateGoal as a model-reported status, not a user lifecycle marker', () => {
+    const component = new ToolCallComponent(
+      {
+        id: 'call_update_goal',
+        name: 'UpdateGoal',
+        args: { status: 'blocked' },
+      },
+      {
+        tool_call_id: 'call_update_goal',
+        output: 'Goal marked blocked.',
+        is_error: false,
+      },
+      darkColors,
+    );
+
+    const out = strip(component.render(100).join('\n'));
+    expect(out).toContain('Reported goal blocked');
+    expect(out).not.toContain('Updated goal (blocked)');
+    expect(out).not.toContain('· blocked');
+    expect(out).not.toContain('Goal marked blocked.');
+    expect(out).not.toContain('● Goal blocked');
+  });
+
   it('appends a chip to the header once a result arrives', () => {
     const component = new ToolCallComponent(
       {

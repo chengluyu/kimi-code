@@ -80,6 +80,28 @@ describe('chip registry', () => {
     expect(pickChip('Think')).toBeUndefined();
   });
 
+  it('GetGoal chip shows the current status', () => {
+    expect(chipFor('GetGoal', {}, result('{"goal":{"status":"active"}}'))).toBe('active');
+  });
+
+  it('GetGoal chip shows when there is no current goal', () => {
+    expect(chipFor('GetGoal', {}, result('{"goal":null}'))).toBe('no goal');
+  });
+
+  it('CreateGoal chip shows the created status', () => {
+    expect(chipFor('CreateGoal', { objective: 'Ship feature X' }, result('{"goal":{"status":"active"}}'))).toBe('active');
+  });
+
+  it('SetGoalBudget chip shows the configured budget', () => {
+    expect(chipFor('SetGoalBudget', { value: 10, unit: 'turns' }, result('Goal budget set.'))).toBe(
+      '10 turns',
+    );
+  });
+
+  it('UpdateGoal has no chip because the status is in the header label', () => {
+    expect(pickChip('UpdateGoal')).toBeUndefined();
+  });
+
   it('Unknown tools have no chip', () => {
     expect(pickChip('SomethingElse')).toBeUndefined();
   });
