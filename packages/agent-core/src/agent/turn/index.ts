@@ -117,11 +117,6 @@ export class TurnFlow {
     return this.agent.homedir ? basename(this.agent.homedir) : this.agent.type;
   }
 
-  /** Whether goal-mode runtime behavior (continuation, abnormal-end marking) applies. */
-  private get goalRuntimeEnabled(): boolean {
-    return this.agent.experimentalFlags.enabled('goal_command');
-  }
-
   // Returns the new turnId, or null if the turn was marked as resuming.
   prompt(input: readonly ContentPart[], origin: PromptOrigin = USER_PROMPT_ORIGIN): number | null {
     this.agent.records.logRecord({
@@ -302,7 +297,7 @@ export class TurnFlow {
       this.activeTurn.controller.signal === signal;
     try {
       const initialGoalStatus = this.agent.goal.getGoal().goal?.status;
-      if (this.goalRuntimeEnabled && initialGoalStatus === 'active') {
+      if (initialGoalStatus === 'active') {
         return await this.driveGoal(firstTurnId, input, origin, signal);
       }
       const end = await this.runOneTurn(firstTurnId, input, origin, signal, true);
@@ -310,7 +305,6 @@ export class TurnFlow {
         initialGoalStatus === 'paused' || initialGoalStatus === 'blocked';
       const currentGoalStatus = this.agent.goal.getGoal().goal?.status;
       if (
-        this.goalRuntimeEnabled &&
         resumedFromPausedOrBlocked &&
         currentGoalStatus === 'active' &&
         end.event.reason !== 'cancelled' &&
@@ -572,8 +566,8 @@ export class TurnFlow {
     const deduper = new ToolCallDeduplicator({ telemetry: this.agent.telemetry });
     await this.agent.mcp?.waitForInitialLoad(signal);
     // Surface the active goal at the start of the turn (append-only; no-op when
-    // goal mode is off). Each goal continuation is its own turn, so this re-injects
-    // the reminder once per turn rather than per step, preserving prompt caching.
+    // there is no active goal). Each goal continuation is its own turn, so this
+    // re-injects the reminder once per turn rather than per step, preserving prompt caching.
     await this.agent.injection.injectGoal();
     while (true) {
       signal.throwIfAborted();
