@@ -1466,9 +1466,10 @@ describe('runHeadless prompt run command', () => {
         turnId: 7,
         origin: { kind: 'user' },
       });
+      const status = await readHeadlessRunStatus(statusFile);
       await writeHeadlessControlRequest(controlFile, {
         schemaVersion: 1,
-        runId: 'run_test',
+        runId: status.runId,
         commandId: 'cmd_pause',
         action: 'pause_goal',
         requestedAt: '2026-06-05T00:00:05.000Z',
@@ -1549,6 +1550,86 @@ describe('runHeadless prompt run command', () => {
     });
   });
 
+  it('ignores stale control requests from previous runs', async () => {
+    const dir = await createTempDir();
+    const statusFile = path.join(dir, 'status.json');
+    const outputDir = path.join(dir, 'out');
+    const controlFile = path.join(outputDir, 'control.json');
+    await writeHeadlessControlRequest(controlFile, {
+      schemaVersion: 1,
+      runId: 'run_previous',
+      commandId: 'cmd_old_cancel',
+      action: 'cancel_goal',
+      requestedAt: '2026-06-05T00:00:05.000Z',
+    });
+    const runtime = createFakeHeadlessRuntime();
+    runtime.session.createGoal.mockResolvedValueOnce({});
+    runtime.session.prompt.mockImplementationOnce(async () => {
+      runtime.emit({
+        type: 'turn.started',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        origin: { kind: 'user' },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      runtime.emit({
+        type: 'goal.updated',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        change: { kind: 'completion', status: 'complete' },
+        snapshot: {
+          goalId: 'goal_123',
+          status: 'complete',
+          objective: 'raise coverage',
+          terminalReason: 'Objective achieved.',
+          turnsUsed: 1,
+          tokensUsed: 100,
+          wallClockMs: 1000,
+        },
+      });
+      runtime.emit({
+        type: 'turn.ended',
+        sessionId: 'ses_headless',
+        agentId: 'main',
+        turnId: 7,
+        reason: 'completed',
+      });
+    });
+
+    await runHeadless(
+      {
+        kind: 'run',
+        options: {
+          goal: 'raise coverage',
+          cwd: '/repo',
+          continue: false,
+          statusFile,
+          outputDir,
+          metadataOnly: false,
+          approvePlan: false,
+          rejectPlan: false,
+          skillsDirs: [],
+        },
+      },
+      '1.2.3-test',
+      {
+        stdout: outputWriter(),
+        createHarness: () => runtime.harness,
+        acquireSessionRunLock: runtime.acquireLock,
+      },
+    );
+
+    expect(runtime.session.cancelGoal).not.toHaveBeenCalled();
+    await expect(readHeadlessRunStatus(statusFile)).resolves.toMatchObject({
+      state: 'completed',
+      control: {
+        lastRequest: null,
+        lastApplied: null,
+      },
+    });
+  });
+
   it('reports interrupt control as interrupted instead of failed', async () => {
     const dir = await createTempDir();
     const statusFile = path.join(dir, 'status.json');
@@ -1574,9 +1655,10 @@ describe('runHeadless prompt run command', () => {
         turnId: 7,
         origin: { kind: 'user' },
       });
+      const status = await readHeadlessRunStatus(statusFile);
       await writeHeadlessControlRequest(controlFile, {
         schemaVersion: 1,
-        runId: 'run_test',
+        runId: status.runId,
         commandId: 'cmd_interrupt',
         action: 'interrupt',
         requestedAt: '2026-06-05T00:00:05.000Z',

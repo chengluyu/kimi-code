@@ -584,7 +584,9 @@ async function applyControlRequest(
   const control = context.status.control;
   if (control === null) return;
   const request = await readHeadlessControlRequest(control.path);
-  if (request === null || appliedControls.has(request.commandId)) return;
+  if (request === null || request.runId !== context.runId || appliedControls.has(request.commandId)) {
+    return;
+  }
   appliedControls.add(request.commandId);
   context.status = {
     ...context.status,
