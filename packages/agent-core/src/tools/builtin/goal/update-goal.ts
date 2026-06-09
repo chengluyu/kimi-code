@@ -16,9 +16,11 @@ import { z } from 'zod';
 import {
   GOAL_BLOCKED_REMINDER_NAME,
   GOAL_COMPLETION_REMINDER_NAME,
+} from '../../../agent/turn';
+import {
   buildGoalBlockedReasonPrompt,
   buildGoalCompletionSummaryPrompt,
-} from '../../../agent/goal/outcome';
+} from './outcome-prompts';
 import type { BuiltinTool } from '../../../agent/tool';
 import type { ToolExecution } from '../../../loop/types';
 import { toInputJsonSchema } from '../../support/input-schema';

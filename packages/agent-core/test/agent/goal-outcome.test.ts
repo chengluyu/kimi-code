@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGoalBlockedReasonPrompt,
   buildGoalCompletionSummaryPrompt,
-} from '../../src/agent/goal/outcome';
+} from '../../src/tools/builtin/goal/outcome-prompts';
 import type { GoalSnapshot } from '../../src/agent/goal';
 
 function snapshot(overrides: Partial<GoalSnapshot> = {}): GoalSnapshot {
