@@ -448,7 +448,37 @@ describe('headless command parsing', () => {
 
     expect(stderr).toContain('Usage: kimi headless');
     expect(stderr).toContain('Headless mode runs without the TUI.');
-    expect(stderr).toContain('Examples:');
+    expect(stderr).toContain('Examples with outcomes:');
+  });
+
+  it('warns users not to poll status too aggressively', () => {
+    const help = helpFor(['headless']);
+
+    expect(help).toContain('Usage heads-up:');
+    expect(help).toContain('Do not poll the status file in a tight loop.');
+    expect(help).toContain('Set a reasonable time limit.');
+    expect(help).toContain('Stop waiting when the time limit expires or when the Kimi process exits.');
+  });
+
+  it('explains headless commands, options, examples, and outcomes', () => {
+    const help = helpFor(['headless']);
+
+    expect(help).toContain('Commands guide:');
+    expect(help).toContain('run: start a headless prompt or goal run.');
+    expect(help).toContain('status: read the status file written by a run.');
+    expect(help).toContain('goal: send pause, cancel, or interrupt to a running goal.');
+    expect(help).toContain('Options guide:');
+    expect(help).toContain('--status-file: write live JSON status for polling.');
+    expect(help).toContain('--output-dir: write Markdown responses to files.');
+    expect(help).toContain('--metadata-only: print only the final JSON metadata line.');
+    expect(help).toContain('--approve-plan: approve a plan review if one appears.');
+    expect(help).toContain('--reject-plan: reject a plan review if one appears.');
+    expect(help).toContain('What happens: Kimi starts a non-interactive session, runs one turn, then exits.');
+    expect(help).toContain('Possible outcomes: completed or failed.');
+    expect(help).toContain('What happens: Kimi creates a goal and continues across turns until the goal stops.');
+    expect(help).toContain('Possible outcomes: completed, paused, failed, cancelled, or interrupted.');
+    expect(help).toContain('What happens: Kimi prints a compact summary of a running or finished run.');
+    expect(help).toContain('What happens: Kimi sends the request through the run control file.');
   });
 
   it('rejects conflicting plan flags', () => {
@@ -535,6 +565,19 @@ describe('headless command parsing', () => {
     expect(helpFor(['headless', 'goal', 'interrupt'])).toContain(
       'Stop the active turn now and leave the goal paused when possible.',
     );
+  });
+
+  it('explains subcommand help with usage details', () => {
+    const runHelp = helpFor(['headless', 'run']);
+    const statusHelp = helpFor(['headless', 'status']);
+    const goalHelp = helpFor(['headless', 'goal']);
+
+    expect(runHelp).toContain('What happens: Kimi starts a non-interactive run, then exits.');
+    expect(runHelp).toContain('Possible outcomes: completed, paused, failed, cancelled, or interrupted.');
+    expect(statusHelp).toContain('What happens: Kimi reads the status JSON and prints the current state.');
+    expect(statusHelp).toContain('Use --json when another program needs the complete status object.');
+    expect(goalHelp).toContain('What happens: Kimi writes a control request for the running goal.');
+    expect(goalHelp).toContain('Use --wait to wait until the running process applies the request or exits.');
   });
 });
 
