@@ -1079,7 +1079,7 @@ describe('runHeadless prompt run command', () => {
     expect(runtime.harness.createSession).toHaveBeenCalledWith({
       workDir: '/repo',
       model: 'k2',
-      permission: 'auto',
+      permission: 'manual',
     });
     expect(runtime.acquireLock).toHaveBeenCalledWith({
       sessionDir: '/tmp/ses_headless',
@@ -1273,6 +1273,38 @@ describe('runHeadless prompt run command', () => {
         },
       ],
     });
+  });
+
+  it('uses manual permission for new sessions so plan flags can handle plan approval', async () => {
+    const runtime = createFakeHeadlessRuntime();
+
+    await runHeadless(
+      {
+        kind: 'run',
+        options: {
+          prompt: 'inspect',
+          cwd: '/repo',
+          continue: false,
+          metadataOnly: true,
+          approvePlan: false,
+          rejectPlan: true,
+          skillsDirs: [],
+        },
+      },
+      '1.2.3-test',
+      {
+        stdout: outputWriter(),
+        createHarness: () => runtime.harness,
+        acquireSessionRunLock: runtime.acquireLock,
+      },
+    );
+
+    expect(runtime.harness.createSession).toHaveBeenCalledWith({
+      workDir: '/repo',
+      model: 'k2',
+      permission: 'manual',
+    });
+    expect(runtime.session.setApprovalHandler).toHaveBeenCalledOnce();
   });
 
   it('writes Markdown to output files when outputDir is set', async () => {

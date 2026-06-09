@@ -68,7 +68,7 @@ interface HeadlessHarness {
   createSession(input: {
     readonly workDir: string;
     readonly model: string;
-    readonly permission: 'auto';
+    readonly permission: 'manual';
   }): Promise<HeadlessSession>;
   resumeSession(input: { readonly id: string }): Promise<HeadlessSession>;
   listSessions(input?: {
@@ -388,7 +388,7 @@ async function resolveHeadlessSession(
   const session = await harness.createSession({
     workDir: initialWorkDir,
     model,
-    permission: 'auto',
+    permission: 'manual',
   });
   const sessionDir = session.summary?.sessionDir;
   if (sessionDir === undefined) {
