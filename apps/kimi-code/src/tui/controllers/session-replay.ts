@@ -57,9 +57,6 @@ export interface SessionReplayHost {
 }
 
 export class SessionReplayRenderer {
-  private replayTurnHasAssistantText = false;
-  private pendingModelBlockedReplayFallback: GoalReplayLifecycleChange | undefined;
-
   constructor(private readonly host: SessionReplayHost) {}
 
   async hydrateFromReplay(session: Session): Promise<boolean> {
@@ -169,13 +166,10 @@ export class SessionReplayRenderer {
 
   private renderRecords(agent: ResumedAgentState): void {
     const context = createReplayRenderContext();
-    this.replayTurnHasAssistantText = false;
-    this.pendingModelBlockedReplayFallback = undefined;
     for (const record of limitReplayRecordsByTurn(agent.replay, REPLAY_TURN_LIMIT)) {
       this.renderRecord(context, record);
     }
     this.flushAssistant(context);
-    this.renderPendingModelBlockedReplayFallback(context);
     this.cleanupRuntime(context);
   }
 
@@ -322,8 +316,6 @@ export class SessionReplayRenderer {
   }
 
   private advanceTurn(context: ReplayRenderContext): void {
-    this.renderPendingModelBlockedReplayFallback(context);
-    this.replayTurnHasAssistantText = false;
     context.turnIndex += 1;
     context.stepIndex = 0;
     context.currentTurnId = `replay:${String(context.turnIndex)}`;
@@ -347,8 +339,6 @@ export class SessionReplayRenderer {
       streamingUI.onThinkingEnd();
     }
     if (text.length > 0) {
-      this.replayTurnHasAssistantText = true;
-      this.pendingModelBlockedReplayFallback = undefined;
       streamingUI.onStreamingTextStart();
       streamingUI.onStreamingTextUpdate(text);
       streamingUI.onStreamingTextEnd();
@@ -388,14 +378,12 @@ export class SessionReplayRenderer {
     const { change } = record;
     switch (change.kind) {
       case 'created':
-        this.renderPendingModelBlockedReplayFallback(context);
         this.host.appendTranscriptEntry({
           ...replayEntry(context, 'goal', 'Goal set', 'plain'),
           goalData: { kind: 'created' },
         });
         return;
       case 'completion':
-        this.renderPendingModelBlockedReplayFallback(context);
         this.host.appendTranscriptEntry(
           replayEntry(context, 'assistant', buildGoalCompletionMessage(record.snapshot), 'markdown'),
         );
@@ -404,14 +392,8 @@ export class SessionReplayRenderer {
         const lifecycleChange: GoalReplayLifecycleChange = { ...change, kind: 'lifecycle' };
         if (isResumeNormalizationGoalPause(lifecycleChange)) return;
         if (isModelBlockedGoalLifecycle(lifecycleChange)) {
-          // Match the live path: wait for the assistant's blocker explanation,
-          // and only render the marker as a fallback if no text arrives.
-          this.pendingModelBlockedReplayFallback = this.replayTurnHasAssistantText
-            ? undefined
-            : lifecycleChange;
           return;
         }
-        this.renderPendingModelBlockedReplayFallback(context);
         this.appendGoalLifecycleReplayEntry(context, lifecycleChange);
         return;
       }
@@ -426,13 +408,6 @@ export class SessionReplayRenderer {
       ...replayEntry(context, 'goal', goalLifecycleReplayContent(change), 'plain'),
       goalData: { kind: 'lifecycle', change },
     });
-  }
-
-  private renderPendingModelBlockedReplayFallback(context: ReplayRenderContext): void {
-    const change = this.pendingModelBlockedReplayFallback;
-    if (change === undefined) return;
-    this.pendingModelBlockedReplayFallback = undefined;
-    this.appendGoalLifecycleReplayEntry(context, change);
   }
 
   private renderHookResult(context: ReplayRenderContext, message: ContextMessage): void {

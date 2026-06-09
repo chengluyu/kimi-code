@@ -499,7 +499,7 @@ describe('KimiTUI resume message replay', () => {
     expect(content).toContain('I am blocked because I need credentials.');
   });
 
-  it('renders a replayed model-blocked fallback when no follow-up is replayed', async () => {
+  it('does not replay model-blocked lifecycle markers without a follow-up', async () => {
     const driver = await replayIntoDriver([
       goalReplay(
         goalSnapshot({ status: 'blocked' }),
@@ -511,7 +511,7 @@ describe('KimiTUI resume message replay', () => {
       driver.state.transcriptEntries
         .filter((entry) => entry.kind === 'goal')
         .map((entry) => entry.content),
-    ).toEqual(['Goal blocked']);
+    ).toEqual([]);
   });
 
   it('keeps replayed blocked lifecycle markers when actor is unavailable', async () => {
@@ -519,6 +519,21 @@ describe('KimiTUI resume message replay', () => {
       goalReplay(
         goalSnapshot({ status: 'blocked' }),
         { kind: 'lifecycle', status: 'blocked' },
+      ),
+    ]);
+
+    expect(
+      driver.state.transcriptEntries
+        .filter((entry) => entry.kind === 'goal')
+        .map((entry) => entry.content),
+    ).toEqual(['Goal blocked']);
+  });
+
+  it('keeps replayed runtime-blocked lifecycle markers', async () => {
+    const driver = await replayIntoDriver([
+      goalReplay(
+        goalSnapshot({ status: 'blocked' }),
+        { kind: 'lifecycle', status: 'blocked', actor: 'runtime' },
       ),
     ]);
 
