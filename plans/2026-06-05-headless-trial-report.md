@@ -2,13 +2,13 @@
 
 ## Summary
 
-Three side projects were created under `~/Developer/@kimi-examples/` with headless CLI runs.
+Three side projects were created under `/tmp/kimi-headless-examples/` with headless CLI runs.
 
 Each project used at least 10 completed headless invocations.
 
 | Project | Completed turns | Verification |
 | --- | ---: | --- |
-| `headless-js-checklist` | 11 | `/Users/chengluyu/.nvm/versions/node/v26.1.0/bin/node --test test/*.test.js` |
+| `headless-js-checklist` | 11 | `node --test test/*.test.js` |
 | `headless-python-textstats` | 10 | `python3 -m unittest discover -s tests` |
 | `headless-web-timer` | 11 | `node test.js` |
 

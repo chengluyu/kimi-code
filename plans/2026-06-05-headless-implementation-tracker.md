@@ -205,7 +205,7 @@ Run manual headless trials and example projects.
 This milestone shall cover:
 
 - Built CLI smoke checks after the final code commit.
-- Three side projects under `~/Developer/@kimi-examples/`.
+- Three side projects under `/tmp/kimi-headless-examples/`.
 - At least 10 headless turns per side project.
 - Status file polling and metadata/file output during the trials.
 - Reports with DOs and DONTs from the trial runs.
@@ -229,5 +229,5 @@ This milestone shall cover:
 - [x] Fail-safe plan approval flags.
 - [x] Docs and changeset.
 - [x] Build CLI and run manual headless trials.
-- [x] Three example projects under `~/Developer/@kimi-examples/`.
+- [x] Three example projects under `/tmp/kimi-headless-examples/`.
 - [x] Reports with DOs and DONTs.

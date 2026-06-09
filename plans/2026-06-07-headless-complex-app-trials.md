@@ -4,7 +4,7 @@
 
 **Goal:** Use `kimi headless` to build eight substantial, usable applications and reveal headless-mode bugs through long, supervised multi-turn development.
 
-**Architecture:** Treat headless mode as the worker interface, not the product being built. A human operator drives each project with short prompts, inspects artifacts after every turn, uses Playwright for browser checks, records failures, and sends terse correction prompts. Each app lives in its own directory under `~/Developer/@kimi-examples/`.
+**Architecture:** Treat headless mode as the worker interface, not the product being built. A human operator drives each project with short prompts, inspects artifacts after every turn, uses Playwright for browser checks, records failures, and sends terse correction prompts. Each app lives in its own directory under `/tmp/kimi-headless-examples/`.
 
 **Tech Stack:** `kimi headless`, TypeScript, Vite, React, SQLite where useful, local file persistence, Playwright CLI for browser inspection, Vitest or app-appropriate tests.
 
@@ -238,7 +238,7 @@ Expected:
 
 ## Global Directory Layout
 
-Create this layout under `~/Developer/@kimi-examples/`:
+Create this layout under `/tmp/kimi-headless-examples/`:
 
 ```text
 headless-trials-2026-06/
@@ -309,7 +309,7 @@ Status files, stdout, stderr, response files, screenshots, and snapshots shall l
 Maintain this file throughout execution:
 
 ```text
-/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/tracker.md
+/tmp/kimi-headless-examples/headless-trials-2026-06/tracker.md
 ```
 
 The tracker is the user's quick progress view when they are not present.
@@ -375,8 +375,8 @@ Mention abandoned folders in `Open Issue` or `Next Action`, and detail them in t
 Before each run, set:
 
 ```sh
-APP_DIR=/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/<app-folder>
-RUN_DIR=/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/runs/<app-folder>/turn-001
+APP_DIR=/tmp/kimi-headless-examples/headless-trials-2026-06/apps/<app-folder>
+RUN_DIR=/tmp/kimi-headless-examples/headless-trials-2026-06/runs/<app-folder>/turn-001
 mkdir -p "$RUN_DIR/output" "$RUN_DIR/playwright"
 ```
 
@@ -385,7 +385,7 @@ mkdir -p "$RUN_DIR/output" "$RUN_DIR/playwright"
 First turn:
 
 ```sh
-node /Users/chengluyu/.codex/worktrees/4260/headless-daemon/apps/kimi-code/dist/main.mjs \
+node /path/to/kimi-code/apps/kimi-code/dist/main.mjs \
   headless run \
   --cwd "$APP_DIR" \
   --prompt "$PROMPT" \
@@ -399,7 +399,7 @@ node /Users/chengluyu/.codex/worktrees/4260/headless-daemon/apps/kimi-code/dist/
 Follow-up turns:
 
 ```sh
-node /Users/chengluyu/.codex/worktrees/4260/headless-daemon/apps/kimi-code/dist/main.mjs \
+node /path/to/kimi-code/apps/kimi-code/dist/main.mjs \
   headless run \
   --cwd "$APP_DIR" \
   --continue \
@@ -414,7 +414,7 @@ node /Users/chengluyu/.codex/worktrees/4260/headless-daemon/apps/kimi-code/dist/
 Status check:
 
 ```sh
-node /Users/chengluyu/.codex/worktrees/4260/headless-daemon/apps/kimi-code/dist/main.mjs \
+node /path/to/kimi-code/apps/kimi-code/dist/main.mjs \
   headless status \
   --file "$RUN_DIR/status.json"
 ```
@@ -555,20 +555,20 @@ Each app shall have polished details:
 
 **Files:**
 
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/README.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/tracker.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/operator-log.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/shared/prompt-bank.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/shared/playwright-notes.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/shared/failure-ledger.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/README.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/tracker.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/operator-log.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/shared/prompt-bank.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/shared/playwright-notes.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/shared/failure-ledger.md`
 
 - [x] **Step 1: Create the root trial folder**
 
 Run:
 
 ```sh
-mkdir -p /Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/shared
-mkdir -p /Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps
+mkdir -p /tmp/kimi-headless-examples/headless-trials-2026-06/shared
+mkdir -p /tmp/kimi-headless-examples/headless-trials-2026-06/apps
 ```
 
 Expected: folders exist.
@@ -652,13 +652,13 @@ Do not commit during plan approval.
 Commit during execution after files are created:
 
 ```sh
-git add /Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06
+git add /tmp/kimi-headless-examples/headless-trials-2026-06
 git commit -m "chore: add headless trial harness"
 ```
 
 ## Task 2: Collaborative Whiteboard
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/collaborative-whiteboard`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/collaborative-whiteboard`
 
 **Goal:** Build a polished local whiteboard for drawing shapes, sticky notes, connectors, and annotations.
 
@@ -721,7 +721,7 @@ Manual actions to perform through Playwright:
 
 ## Task 3: Kanban Planning System
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/kanban-planning-system`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/kanban-planning-system`
 
 **Goal:** Build a usable planning board for tasks, lanes, dependencies, filters, and saved views.
 
@@ -776,7 +776,7 @@ Manual actions to perform through Playwright:
 
 ## Task 4: Mini Log Analytics Workbench
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/log-analytics-workbench`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/log-analytics-workbench`
 
 **Goal:** Build a local log-analysis app that imports logs, parses events, filters timelines, and highlights anomalies.
 
@@ -829,7 +829,7 @@ Manual actions to perform through Playwright:
 
 ## Task 5: Interactive SQL Explorer
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/sql-explorer`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/sql-explorer`
 
 **Goal:** Build a local SQLite-style query explorer with schema browsing, saved queries, result tables, CSV import, and charting.
 
@@ -884,7 +884,7 @@ Manual actions to perform through Playwright:
 
 ## Task 6: Workflow Automation Builder
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/workflow-automation-builder`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/workflow-automation-builder`
 
 **Goal:** Build a visual node-based workflow builder with mock execution and trace inspection.
 
@@ -939,7 +939,7 @@ Manual actions to perform through Playwright:
 
 ## Task 7: Issue Tracker With Triage Hooks
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/issue-tracker-triage`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/issue-tracker-triage`
 
 **Goal:** Build a local issue tracker with triage workflows, duplicate detection, saved views, comments, and activity history.
 
@@ -994,7 +994,7 @@ Manual actions to perform through Playwright:
 
 ## Task 8: Music Library Manager
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/music-library-manager`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/music-library-manager`
 
 **Goal:** Build a local music library manager with folder import simulation, metadata editing, playlists, duplicate detection, and smart filters.
 
@@ -1048,7 +1048,7 @@ Manual actions to perform through Playwright:
 
 ## Task 9: Personal CRM
 
-**App Directory:** `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps/personal-crm`
+**App Directory:** `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/personal-crm`
 
 **Goal:** Build a local CRM for contacts, companies, interactions, reminders, pipeline stages, notes, and search.
 
@@ -1104,9 +1104,9 @@ Manual actions to perform through Playwright:
 
 **Files:**
 
-- Modify: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/tracker.md`
-- Create: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/operator-log.md`
-- Modify: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/shared/failure-ledger.md`
+- Modify: `/tmp/kimi-headless-examples/headless-trials-2026-06/tracker.md`
+- Create: `/tmp/kimi-headless-examples/headless-trials-2026-06/operator-log.md`
+- Modify: `/tmp/kimi-headless-examples/headless-trials-2026-06/shared/failure-ledger.md`
 - Modify: each app's `prompt-log.md`
 - Modify: each app's `trial-report.md`
 
@@ -1117,7 +1117,7 @@ Run:
 ```sh
 python3 - <<'PY'
 import json, pathlib
-root = pathlib.Path('/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps')
+root = pathlib.Path('/tmp/kimi-headless-examples/headless-trials-2026-06/apps')
 for app in sorted(root.iterdir()):
     if not app.is_dir():
         continue
@@ -1172,7 +1172,7 @@ Run:
 ```sh
 python3 - <<'PY'
 import pathlib, re
-root = pathlib.Path('/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps')
+root = pathlib.Path('/tmp/kimi-headless-examples/headless-trials-2026-06/apps')
 for app in sorted(root.iterdir()):
     if not app.is_dir():
         continue
@@ -1233,7 +1233,7 @@ For each abandoned app folder, verify:
 Run:
 
 ```sh
-find /Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/apps \
+find /tmp/kimi-headless-examples/headless-trials-2026-06/apps \
   -maxdepth 1 \
   -type d \
   -name '*-restart-*' \
@@ -1272,7 +1272,7 @@ Each `trial-report.md` shall include:
 Create:
 
 ```text
-/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/report.md
+/tmp/kimi-headless-examples/headless-trials-2026-06/report.md
 ```
 
 Include:
@@ -1293,7 +1293,7 @@ Include:
 
 **Files:**
 
-- Modify: `/Users/chengluyu/Developer/@kimi-examples/headless-trials-2026-06/report.md`
+- Modify: `/tmp/kimi-headless-examples/headless-trials-2026-06/report.md`
 - Modify: `plans/2026-06-07-headless-complex-app-trials.md`
 
 - [ ] **Step 1: Verify all app tests**
@@ -1373,7 +1373,7 @@ Do not reuse the abandoned folder's Git repo or headless session for the restart
 
 ## Definition of Done
 
-- All eight apps exist under `~/Developer/@kimi-examples/headless-trials-2026-06/apps/`.
+- All eight apps exist under `/tmp/kimi-headless-examples/headless-trials-2026-06/apps/`.
 - Each app has at least 50 completed headless turns.
 - If an app was restarted, the final restart folder has at least 50 completed turns.
 - Abandoned app folders are preserved and linked from the aggregate report.
