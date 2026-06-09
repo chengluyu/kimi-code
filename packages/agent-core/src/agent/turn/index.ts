@@ -625,7 +625,7 @@ export class TurnFlow {
               //    final user-facing outcome message before the turn ends.
               if (
                 !goalOutcomeMessageContinuationUsed &&
-                isGoalOutcomeReminder(this.agent.context.history.at(-1))
+                isGoalOutcomeReminderOrigin(this.agent.context.history.at(-1)?.origin)
               ) {
                 goalOutcomeMessageContinuationUsed = true;
                 if (!hasStepBudgetRemaining(loopControl?.maxStepsPerTurn, ctx.stepNumber)) {
@@ -867,10 +867,6 @@ export class TurnFlow {
     const failure = this.stepFailureByTurn.get(turnId);
     return failure?.reason === 'error' && failure.activeStep !== undefined;
   }
-}
-
-function isGoalOutcomeReminder(message: { readonly origin?: PromptOrigin | undefined } | undefined): boolean {
-  return isGoalOutcomeReminderOrigin(message?.origin);
 }
 
 function isGoalOutcomeReminderOrigin(origin: PromptOrigin | undefined): boolean {
