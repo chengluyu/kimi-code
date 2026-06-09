@@ -58,8 +58,8 @@ interface HeadlessRunIO {
 type HeadlessSignalName = 'SIGINT' | 'SIGTERM';
 
 interface HeadlessProcessSignals {
-  once(signal: HeadlessSignalName, listener: () => void | Promise<void>): void;
-  off(signal: HeadlessSignalName, listener: () => void | Promise<void>): void;
+  once(signal: HeadlessSignalName, listener: () => void): void;
+  off(signal: HeadlessSignalName, listener: () => void): void;
   exit(code: number): never;
 }
 
@@ -293,8 +293,12 @@ function installHeadlessSignalHandlers(input: {
   readonly releaseLock: () => Promise<void>;
   readonly closeHarness: () => Promise<void>;
 }): () => void {
-  const sigintListener = () => handleHeadlessSignal('SIGINT', input);
-  const sigtermListener = () => handleHeadlessSignal('SIGTERM', input);
+  const sigintListener = () => {
+    void handleHeadlessSignal('SIGINT', input);
+  };
+  const sigtermListener = () => {
+    void handleHeadlessSignal('SIGTERM', input);
+  };
   input.signals.once('SIGINT', sigintListener);
   input.signals.once('SIGTERM', sigtermListener);
   return () => {

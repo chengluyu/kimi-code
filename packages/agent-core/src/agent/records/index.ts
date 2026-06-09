@@ -127,7 +127,6 @@ function inferRestoredTurnCount(records: readonly AgentRecord[]): number {
   return Math.max(
     countAcceptedTopLevelTurnInputs(records),
     countFirstStepLoopEvents(records),
-    countGoalContinuationTurns(records),
   );
 }
 
@@ -170,10 +169,6 @@ function countFirstStepLoopEvents(records: readonly AgentRecord[]): number {
       record.event.type === 'step.begin' &&
       record.event.step === 1,
   ).length;
-}
-
-function countGoalContinuationTurns(records: readonly AgentRecord[]): number {
-  return records.filter((record) => record.type === 'goal.continuation').length;
 }
 
 export interface RestoringContext {
