@@ -1,5 +1,4 @@
 import type { Agent } from '..';
-import { buildGoalCompletionMessageFromStats } from '../goal/completion';
 import {
   AGENT_WIRE_PROTOCOL_VERSION,
   isNewerWireVersion,
@@ -33,6 +32,9 @@ export type { BlobStoreOptions } from './blobref';
 function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
   switch (input.type) {
     case 'metadata':
+      return;
+    case 'forked':
+      agent.goal.restoreForked(input);
       return;
     case 'turn.prompt':
       agent.turn.restorePrompt();
@@ -109,31 +111,14 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'tools.update_store':
       agent.tools.updateStore(input.key, input.value);
       return;
-    // TODO: Move goal state transitions to real resume semantics. Goal state is
-    // restored from `state.json` (metadata.custom.goal) instead of being rebuilt
-    // from ordered records; completion updates also feed a replay-only UI card.
     case 'goal.create':
-    case 'goal.account_usage':
-    case 'goal.continuation':
-    case 'goal.clear':
+      agent.goal.restoreCreate(input);
       return;
     case 'goal.update':
-      if (
-        input.status === 'complete' &&
-        input.turnsUsed !== undefined &&
-        input.tokensUsed !== undefined &&
-        input.wallClockMs !== undefined
-      ) {
-        agent.replayBuilder.push({
-          type: 'goal_completion',
-          content: buildGoalCompletionMessageFromStats({
-            terminalReason: input.reason,
-            turnsUsed: input.turnsUsed,
-            tokensUsed: input.tokensUsed,
-            wallClockMs: input.wallClockMs,
-          }),
-        });
-      }
+      agent.goal.restoreUpdate(input);
+      return;
+    case 'goal.clear':
+      agent.goal.restoreClear(input);
       return;
   }
 }

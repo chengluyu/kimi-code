@@ -30,7 +30,6 @@ import type {
   TurnStepStartedEvent,
   WarningEvent,
 } from '@moonshot-ai/kimi-code-sdk';
-import { buildGoalCompletionMessage } from '@moonshot-ai/kimi-code-sdk';
 
 import { MoonLoader } from '../components/chrome/moon-loader';
 import { buildGoalMarker } from '../components/messages/goal-markers';
@@ -43,6 +42,7 @@ import {
   OAUTH_LOGIN_REQUIRED_CODE,
   OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE,
 } from '../constant/kimi-tui';
+import { buildGoalCompletionMessage } from '../utils/goal-completion';
 import {
   argsRecord,
   formatErrorPayload,
@@ -598,8 +598,8 @@ export class SessionEventHandler {
 
     // Completion -> the box disappears (snapshot cleared on the follow-up null
     // update) and a deterministic completion message lands in the transcript.
-    // The model-facing follow-up prompt stays in context without the checkmark;
-    // resume rebuilds this deterministic card from the goal.update audit stats.
+    // Resume renders the same text from the durable goal completion replay
+    // record, so live and replayed completion cards stay identical.
     if (change.kind === 'completion' && event.snapshot !== null) {
       this.pendingModelBlockedFallback = undefined;
       this.goalCompletionAwaitingClear = true;
@@ -618,7 +618,7 @@ export class SessionEventHandler {
     // ctrl+o-expandable marker.
     if (change.kind === 'lifecycle' && change.status === 'blocked') {
       void this.notifyQueuedGoalWaitingOnBlocked();
-      if (event.snapshot?.updatedBy === 'model') {
+      if (change.actor === 'model' || change.reason === undefined) {
         this.pendingModelBlockedFallback = this.currentTurnHasAssistantText
           ? undefined
           : change;
@@ -632,7 +632,7 @@ export class SessionEventHandler {
       change,
       state.theme.colors,
       state.toolOutputExpanded,
-      event.snapshot?.updatedBy,
+      change.actor,
     );
     if (marker !== null) {
       state.transcriptContainer.addChild(marker);
