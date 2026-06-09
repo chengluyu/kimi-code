@@ -26,11 +26,9 @@ import { resolve } from 'pathe';
 
 import type { CLIOptions } from '#/cli/options';
 import { MigrationScreenComponent, type MigrationScreenResult } from '#/migration/index';
-import type { GitLsFilesCache } from '#/utils/git/git-ls-files';
-import { createGitLsFilesCache } from '#/utils/git/git-ls-files';
 import { appendInputHistory, loadInputHistory } from '#/utils/history/input-history';
 import { getInputHistoryFile } from '#/utils/paths';
-import { detectFdPath } from '#/utils/process/fd-detect';
+import { detectFdPath, ensureFdPath } from '#/utils/process/fd-detect';
 
 import {
   BUILTIN_SLASH_COMMANDS,
@@ -71,7 +69,11 @@ import { FileMentionProvider } from './components/editor/file-mention-provider';
 import { AssistantMessageComponent } from './components/messages/assistant-message';
 import { BackgroundAgentStatusComponent } from './components/messages/background-agent-status';
 import { CronMessageComponent } from './components/messages/cron-message';
-import { GoalCompletionMessageComponent } from './components/messages/goal-panel';
+import { buildGoalMarker } from './components/messages/goal-markers';
+import {
+  GoalCompletionMessageComponent,
+  GoalSetMessageComponent,
+} from './components/messages/goal-panel';
 import { SkillActivationComponent } from './components/messages/skill-activation';
 import {
   NoticeMessageComponent,
@@ -202,8 +204,8 @@ export class KimiTUI {
   private skillCommands: readonly KimiSlashCommand[] = [];
   readonly skillCommandMap = new Map<string, string>();
   private readonly imageStore = new ImageAttachmentStore();
-  private readonly fdPath: string | null = detectFdPath();
-  private readonly gitLsFilesCache: GitLsFilesCache;
+  private fdPath: string | null = detectFdPath();
+  private fdDownloadStarted = false;
   sessionEventUnsubscribe: (() => void) | undefined;
   cancelInFlight: (() => void) | undefined;
   deferUserMessages = false;
@@ -272,7 +274,6 @@ export class KimiTUI {
     this.uninstallRainbowDance = installRainbowDance(() => {
       this.state.ui.requestRender();
     });
-    this.gitLsFilesCache = createGitLsFilesCache(tuiOptions.initialAppState.workDir);
 
     this.reverseRpcDisposers.push(
       ...registerReverseRPCHandlers(this.approvalController, this.questionController, {
@@ -328,7 +329,6 @@ export class KimiTUI {
       slashCommands,
       this.state.appState.workDir,
       this.fdPath,
-      this.gitLsFilesCache,
     );
     this.state.editor.setAutocompleteProvider(provider);
   }
@@ -383,6 +383,7 @@ export class KimiTUI {
             return;
           }
           const shouldReplayHistory = await this.initMainTui();
+          this.startBackgroundFdAutocomplete();
           await this.finishStartup(shouldReplayHistory);
         } catch (error) {
           this.disposeTerminalTracking();
@@ -395,6 +396,7 @@ export class KimiTUI {
       const shouldReplayHistory = await this.initMainTui();
       this.startEventLoop();
       try {
+        this.startBackgroundFdAutocomplete();
         await this.finishStartup(shouldReplayHistory);
       } catch (error) {
         this.disposeTerminalTracking();
@@ -425,6 +427,21 @@ export class KimiTUI {
     this.state.ui.start();
     this.terminalFocusTrackingDispose = installTerminalFocusTracking(this.state);
     this.refreshTerminalThemeTracking();
+  }
+
+  private startBackgroundFdAutocomplete(): void {
+    if (this.fdPath !== null || this.fdDownloadStarted) return;
+    this.fdDownloadStarted = true;
+
+    void ensureFdPath()
+      .then((fdPath) => {
+        if (fdPath === null) return;
+        this.fdPath = fdPath;
+        this.setupAutocomplete();
+      })
+      .catch(() => {
+        // Best-effort background bootstrap: autocomplete keeps using the filesystem fallback.
+      });
   }
 
   private async refreshProviderModelsInBackground(): Promise<void> {
@@ -1028,9 +1045,7 @@ export class KimiTUI {
   async syncRuntimeState(session: Session = this.requireSession()): Promise<void> {
     const [status, goalResult] = await Promise.all([
       session.getStatus(),
-      isExperimentalFlagEnabled('goal_command')
-        ? session.getGoal()
-        : Promise.resolve({ goal: null }),
+      session.getGoal(),
     ]);
     this.setAppState({
       sessionId: session.id,
@@ -1286,6 +1301,18 @@ export class KimiTUI {
           entry.cronData ?? {},
           this.state.theme.colors,
         );
+      case 'goal':
+        if (entry.goalData?.kind === 'created') {
+          return new GoalSetMessageComponent(this.state.theme.colors);
+        }
+        if (entry.goalData?.kind === 'lifecycle') {
+          return buildGoalMarker(
+            entry.goalData.change,
+            this.state.theme.colors,
+            this.state.toolOutputExpanded,
+          );
+        }
+        return null;
       case 'assistant': {
         if (entry.content.trimStart().startsWith('✓ Goal complete')) {
           return new GoalCompletionMessageComponent(entry.content, this.state.theme.colors);

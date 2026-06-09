@@ -16,7 +16,6 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import { HookEngine } from '../../src/session/hooks';
-import { FLAG_DEFINITIONS, FlagResolver } from '../../src/flags';
 import type { AgentOptions } from '../../src/agent';
 import type { Logger, LogPayload } from '../../src/logging';
 import type {
@@ -26,7 +25,7 @@ import type {
 } from '../../src/session/subagent-host';
 import { recordingTelemetry, type TelemetryRecord } from '../fixtures/telemetry';
 import { createFakeKaos } from '../tools/fixtures/fake-kaos';
-import { SessionGoalStore, type SessionGoalState } from '../../src/session/goal';
+import { SessionGoalStore, type SessionGoalState } from '../../src/agent/goal';
 import { InMemoryAgentRecordPersistence } from '../../src/agent/records';
 import { createCommandKaos, testAgent, type TestAgentOptions } from './harness/agent';
 import { executeTool } from '../tools/fixtures/execute-tool';
@@ -393,7 +392,6 @@ describe('Agent turn flow', () => {
     });
     const ctx = testAgent({
       subagentHost,
-      experimentalFlags: new FlagResolver({}, FLAG_DEFINITIONS, { agent_swarm: true }),
     });
     ctx.configure({ tools: ['AgentSwarm'] });
     await ctx.rpc.setPermission({ mode: 'yolo' });
