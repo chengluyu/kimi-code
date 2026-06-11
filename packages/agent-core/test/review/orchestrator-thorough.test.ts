@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { APIProviderRateLimitError } from '@moonshot-ai/kosong';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -136,6 +137,61 @@ describe('ReviewOrchestrator thorough review', () => {
           prompt: expect.stringContaining('Unreconciled source comments: review-comment-'),
         }),
       );
+    });
+  });
+
+  it('aborts and waits for sibling reviewers when one reviewer fails', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const settledSiblings: string[] = [];
+      let nextAgent = 0;
+      const launcher: ReviewWorkerLauncher = {
+        spawn: vi.fn(async (options: SpawnSubagentOptions) => {
+          if (options.review === undefined) throw new Error('missing review facade');
+          nextAgent += 1;
+          const agentId = `agent-${String(nextAgent)}`;
+          const assignment = options.review.getAssignment();
+          const perspective = assignment.perspective ?? '';
+          if (perspective === 'Security and data safety') {
+            return {
+              agentId,
+              profileName: options.profileName,
+              resumed: false,
+              completion: Promise.reject<{ readonly result: string }>(
+                new APIProviderRateLimitError('Rate limited', 'req-429'),
+              ),
+            };
+          }
+          return {
+            agentId,
+            profileName: options.profileName,
+            resumed: false,
+            completion: new Promise<{ readonly result: string }>((_resolve, reject) => {
+              options.signal.addEventListener('abort', () => {
+                setTimeout(() => {
+                  settledSiblings.push(perspective);
+                  reject(options.signal.reason);
+                }, 0);
+              }, { once: true });
+            }),
+          };
+        }),
+        resume: vi.fn(),
+      };
+
+      await expect(
+        createOrchestrator(repo, runtime, launcher).start({
+          target: { scope: 'working_tree' },
+          intensity: 'thorough',
+        }),
+      ).rejects.toThrow('Rate limited');
+
+      expect(launcher.spawn).toHaveBeenCalledTimes(THOROUGH_REVIEW_PERSPECTIVES.length);
+      expect(settledSiblings).toEqual([
+        'Correctness and regressions',
+        'Maintainability and tests',
+      ]);
+      expect(runtime.getActiveRun()).toBeNull();
     });
   });
 });

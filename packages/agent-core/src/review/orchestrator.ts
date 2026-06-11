@@ -267,7 +267,7 @@ export class ReviewOrchestrator {
         group: 'thorough',
       }),
     );
-    const reviewers = await Promise.all(
+    const reviewers = await this.runWorkersInParallel((signal) =>
       reviewerAssignments.map((assignment) =>
         this.runWorker({
           assignment,
@@ -277,6 +277,7 @@ export class ReviewOrchestrator {
             assignment,
           }),
           description: `Review changes: ${assignment.perspective ?? 'focused review'}`,
+          signal,
         }),
       ),
     );
@@ -359,7 +360,7 @@ export class ReviewOrchestrator {
       });
       return { group, assignment, sourceCommentIds };
     });
-    const reconciliators = await Promise.all(
+    const reconciliators = await this.runWorkersInParallel((signal) =>
       reconciliatorAssignments.map(({ group, assignment, sourceCommentIds }) =>
         this.runWorker({
           assignment,
@@ -370,6 +371,7 @@ export class ReviewOrchestrator {
             sourceCommentCount: sourceCommentIds.length,
           }),
           description: `Reconcile Deep review: ${group.label}`,
+          signal,
         }),
       ),
     );
@@ -388,6 +390,7 @@ export class ReviewOrchestrator {
     readonly profileName: 'reviewer' | 'reconciliator';
     readonly prompt: string;
     readonly description: string;
+    readonly signal?: AbortSignal;
   }): Promise<ReviewWorkerDriverResult> {
     return new ReviewWorkerDriver({
       runtime: this.options.runtime,
@@ -399,8 +402,32 @@ export class ReviewOrchestrator {
       parentToolCallId: this.options.parentToolCallId ?? 'review',
       parentToolCallUuid: this.options.parentToolCallUuid,
       runInBackground: false,
-      signal: this.signal,
+      signal: input.signal ?? this.signal,
     }).run();
+  }
+
+  private async runWorkersInParallel<T>(
+    buildWorkers: (signal: AbortSignal) => readonly Promise<T>[],
+  ): Promise<readonly T[]> {
+    const controller = new AbortController();
+    const unlink = linkAbortSignal(this.signal, controller);
+    const promises = buildWorkers(controller.signal);
+    const wrapped = promises.map(async (promise) => {
+      try {
+        return await promise;
+      } catch (error) {
+        if (!controller.signal.aborted) controller.abort(error);
+        throw error;
+      }
+    });
+    try {
+      return await Promise.all(wrapped);
+    } catch (error) {
+      await Promise.allSettled(promises);
+      throw error;
+    } finally {
+      unlink();
+    }
   }
 
   private async runDeepReviewerSwarm(
