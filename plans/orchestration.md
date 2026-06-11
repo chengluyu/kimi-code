@@ -26,17 +26,15 @@ The main agent acts as the review coordinator. It resolves the target, creates t
 
 Reviewer workers should not inherit private reasoning from the current conversation. They should receive a curated review packet, as if they were a fresh reviewer joining the task.
 
-## Literal `AgentSwarm` Requirement
+## `AgentSwarm` Terminology
 
-In this design, `swarm` means the concrete `AgentSwarm` mechanism already in the product:
+In this project, `swarm` means `AgentSwarm`. For code review, that includes:
 
 - the `AgentSwarm` tool call
 - `packages/agent-core/src/tools/builtin/collaboration/agent-swarm.ts`
 - `packages/agent-core/src/session/subagent-batch.ts`
 - `packages/agent-core/src/agent/swarm`
 - the `AgentSwarmProgressComponent` and related TUI event handling
-
-It does not mean a hand-written `Promise.all` over review workers, a direct sub-agent fan-out, or a generic "many agents" implementation.
 
 Only `Deep` has this requirement. `Standard`, `Thorough`, and reconciliator runs may use the review worker driver directly. The `Deep` reviewer phase must be launched through `AgentSwarm`; if it is not, the mode is incomplete and must not be described to users as `AgentSwarm`-backed.
 
@@ -695,6 +693,6 @@ The clean internal boundary is:
 
 Start with `Standard` end to end. Then add `Thorough`, then `Deep`.
 
-Before enabling `Deep`, verify that the reviewer phase goes through the concrete `AgentSwarm` path and renders through the `AgentSwarm` TUI. Coverage matrix tests alone are not enough.
+Before enabling `Deep`, verify that the reviewer phase goes through the `AgentSwarm` path and renders through the `AgentSwarm` TUI. Coverage matrix tests alone are not enough.
 
 This keeps the first implementation useful while preserving the architecture needed for stronger review modes.

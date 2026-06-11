@@ -76,7 +76,7 @@ Detailed behavior:
 
 - `Standard` runs one dedicated reviewer.
 - `Thorough` asks the main agent to choose several review perspectives, then spawns focused sub-agents. Each reviewer reviews the whole diff from one perspective.
-- `Deep` uses the existing `AgentSwarm` mechanism. This is not shorthand for any generic multi-agent fan-out. Reviewers split the changed files and perspectives with overlap, so each changed file is reviewed more than once, and the user sees the `AgentSwarm` progress UI.
+- `Deep` uses `AgentSwarm`. Reviewers split the changed files and perspectives with overlap, so each changed file is reviewed more than once, and the user sees the `AgentSwarm` progress UI.
 
 ### 5. Show perspectives for multi-agent modes
 
@@ -140,7 +140,7 @@ Expected perspectives include correctness, tests, compatibility, maintainability
 
 `Deep` uses `AgentSwarm`-backed review.
 
-In this design, `swarm` means the concrete `AgentSwarm` tool, runtime, cancellation behavior, and TUI progress display. A direct loop that starts many review workers is not enough for `Deep`.
+In this design, `swarm` means `AgentSwarm`: the tool, runtime, cancellation behavior, and TUI progress display. Direct review-worker orchestration is not enough for `Deep`.
 
 Flow:
 
