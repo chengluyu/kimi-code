@@ -5,7 +5,7 @@ import type { Kaos } from '@moonshot-ai/kaos';
 import { ErrorCodes, KimiError } from '#/errors';
 import { getRootLogger, log } from '#/logging/logger';
 import type { Logger, SessionLogHandle } from '#/logging/types';
-import type { KimiConfig, SDKSessionRPC } from '#/rpc';
+import type { AgentEvent, KimiConfig, SDKSessionRPC } from '#/rpc';
 import { proxyWithExtraPayload } from '#/rpc/types';
 
 import { Agent, type AgentOptions, type AgentType } from '../agent';
@@ -162,6 +162,23 @@ export class Session {
       this.logHandle?.logger ??
       (options.id === undefined ? log : log.createChild({ sessionId: options.id }));
     this.rpc = options.rpc;
+    this.review.setEventSink({
+      assignmentStarted: (assignment) => {
+        this.emitReviewEvent({ type: 'review.assignment.started', assignment });
+      },
+      progressUpdated: (progress) => {
+        this.emitReviewEvent({ type: 'review.assignment.progress', progress });
+      },
+      commentAdded: (comment) => {
+        this.emitReviewEvent({ type: 'review.comment.added', comment });
+      },
+      commentMerged: (comment) => {
+        this.emitReviewEvent({ type: 'review.comment.merged', comment });
+      },
+      commentDismissed: (dismissal) => {
+        this.emitReviewEvent({ type: 'review.comment.dismissed', dismissal });
+      },
+    });
     this.experimentalFlags = options.experimentalFlags ?? new FlagResolver();
     this.hookEngine = new HookEngine(options.hooks, {
       cwd: options.kaos.getcwd(),
@@ -407,6 +424,9 @@ export class Session {
       runtime: this.review,
       launcher: mainAgent.subagentHost!,
       parentToolCallId: 'review',
+      emitEvent: (event) => {
+        this.emitReviewEvent(event);
+      },
     });
     this.activeReviewOrchestrator = orchestrator;
     try {
@@ -676,6 +696,10 @@ export class Session {
       ErrorCodes.REQUEST_INVALID,
       'Code review is experimental. Enable KIMI_CODE_EXPERIMENTAL_CODE_REVIEW to use review RPC methods.',
     );
+  }
+
+  private emitReviewEvent(event: AgentEvent): void {
+    void this.rpc.emitEvent({ agentId: 'main', ...event });
   }
 
   private async triggerSessionStart(source: 'startup' | 'resume'): Promise<void> {

@@ -60,6 +60,14 @@ export interface ReviewRuntimeOptions {
   readonly idGenerator?: (prefix: string) => string;
 }
 
+export interface ReviewRuntimeEventSink {
+  assignmentStarted(assignment: ReviewAssignment): void;
+  progressUpdated(progress: ReviewProgress): void;
+  commentAdded(comment: ReviewComment): void;
+  commentMerged(comment: ReviewMergedComment): void;
+  commentDismissed(comment: ReviewDismissedComment): void;
+}
+
 export interface ReviewAgentFacade {
   readonly assignmentId: string;
   getActiveRun(): ReviewRuntimeRun;
@@ -87,9 +95,14 @@ export class SessionReviewRuntime {
   private readonly mergedComments = new Map<string, ReviewMergedComment>();
   private readonly dismissedComments = new Map<string, ReviewDismissedComment>();
   private readonly idGenerator: (prefix: string) => string;
+  private eventSink: ReviewRuntimeEventSink | undefined;
 
   constructor(options: ReviewRuntimeOptions = {}) {
     this.idGenerator = options.idGenerator ?? ((prefix) => `${prefix}-${randomUUID()}`);
+  }
+
+  setEventSink(eventSink: ReviewRuntimeEventSink | undefined): void {
+    this.eventSink = eventSink;
   }
 
   startReview(
@@ -150,6 +163,7 @@ export class SessionReviewRuntime {
       assignmentId: id,
       status: 'active',
     });
+    this.eventSink?.assignmentStarted(assignment);
     return assignment;
   }
 
@@ -230,6 +244,7 @@ export class SessionReviewRuntime {
       blocker: input.blocker,
     };
     this.progress.set(assignmentId, progress);
+    this.eventSink?.progressUpdated(progress);
     return progress;
   }
 
@@ -255,6 +270,7 @@ export class SessionReviewRuntime {
       suggestedFix: input.suggestedFix,
     };
     this.comments.set(id, comment);
+    this.eventSink?.commentAdded(comment);
     return comment;
   }
 
@@ -287,6 +303,7 @@ export class SessionReviewRuntime {
     for (const source of sources) {
       this.comments.set(source.id, { ...source, state: 'merged' });
     }
+    this.eventSink?.commentMerged(merged);
     return merged;
   }
 
@@ -308,6 +325,7 @@ export class SessionReviewRuntime {
     };
     this.dismissedComments.set(input.commentId, dismissed);
     this.comments.set(comment.id, { ...comment, state: 'dismissed' });
+    this.eventSink?.commentDismissed(dismissed);
     return dismissed;
   }
 

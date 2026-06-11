@@ -114,6 +114,19 @@ export type GoalTranscriptData =
   | { readonly kind: 'created' }
   | { readonly kind: 'lifecycle'; readonly change: GoalChange };
 
+export interface ReviewTranscriptData {
+  readonly state:
+    | 'started'
+    | 'assignment'
+    | 'progress'
+    | 'comment'
+    | 'completed'
+    | 'cancelled'
+    | 'failed';
+  readonly title: string;
+  readonly detail?: string;
+}
+
 export type TranscriptEntryKind =
   | 'welcome'
   | 'user'
@@ -123,7 +136,8 @@ export type TranscriptEntryKind =
   | 'status'
   | 'skill_activation'
   | 'cron'
-  | 'goal';
+  | 'goal'
+  | 'review';
 
 export type SkillActivationTrigger = 'user-slash' | 'model-tool' | 'nested-skill';
 
@@ -140,6 +154,7 @@ export interface TranscriptEntry {
   compactionData?: CompactionTranscriptData;
   cronData?: CronTranscriptData;
   goalData?: GoalTranscriptData;
+  reviewData?: ReviewTranscriptData;
   imageAttachmentIds?: readonly number[];
   skillActivationId?: string;
   skillName?: string;

@@ -14,6 +14,15 @@ import type {
   GoalChange,
   GoalUpdatedEvent,
   HookResultEvent,
+  ReviewAssignmentProgressEvent,
+  ReviewAssignmentStartedEvent,
+  ReviewCancelledEvent,
+  ReviewCommentAddedEvent,
+  ReviewCommentDismissedEvent,
+  ReviewCommentMergedEvent,
+  ReviewCompletedEvent,
+  ReviewFailedEvent,
+  ReviewStartedEvent,
   Session,
   SessionMetaUpdatedEvent,
   SkillActivatedEvent,
@@ -42,6 +51,7 @@ import {
   OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE,
 } from '../constant/kimi-tui';
 import { buildGoalCompletionMessage } from '../utils/goal-completion';
+import { formatReviewStats } from '../utils/review-options';
 import {
   argsRecord,
   formatErrorPayload,
@@ -156,6 +166,7 @@ export class SessionEventHandler {
     this.pendingModelBlockedFallback = undefined;
     this.queuedGoalPromotionPending = false;
     this.queuedGoalPromotionInFlight = false;
+    this.host.state.reviewActive = false;
     this.clearQueuedGoalPromotionTimer();
     this.stopAllMcpServerStatusSpinners();
   }
@@ -251,6 +262,15 @@ export class SessionEventHandler {
       case 'agent.status.updated': this.handleStatusUpdate(event); break;
       case 'session.meta.updated': this.handleSessionMetaChanged(event); break;
       case 'goal.updated': this.handleGoalUpdated(event); break;
+      case 'review.started': this.handleReviewStarted(event); break;
+      case 'review.assignment.started': this.handleReviewAssignmentStarted(event); break;
+      case 'review.assignment.progress': this.handleReviewAssignmentProgress(event); break;
+      case 'review.comment.added': this.handleReviewCommentAdded(event); break;
+      case 'review.comment.merged': this.handleReviewCommentMerged(event); break;
+      case 'review.comment.dismissed': this.handleReviewCommentDismissed(event); break;
+      case 'review.completed': this.handleReviewCompleted(event); break;
+      case 'review.cancelled': this.handleReviewCancelled(event); break;
+      case 'review.failed': this.handleReviewFailed(event); break;
       case 'skill.activated': this.handleSkillActivated(event); break;
       case 'error': this.handleSessionError(event); break;
       case 'warning': this.handleSessionWarning(event); break;
@@ -317,6 +337,92 @@ export class SessionEventHandler {
         coalescedCount: event.origin.coalescedCount,
         stale: event.origin.stale,
       },
+    });
+  }
+
+  private handleReviewStarted(event: ReviewStartedEvent): void {
+    this.host.state.reviewActive = true;
+    this.appendReviewProgress({
+      state: 'started',
+      title: 'Review started',
+      detail: `${formatReviewStats(event.stats)} · ${event.intensity}`,
+    });
+  }
+
+  private handleReviewAssignmentStarted(event: ReviewAssignmentStartedEvent): void {
+    this.appendReviewProgress({
+      state: 'assignment',
+      title: 'Reviewer started',
+      detail: assignmentDetail(event.assignment.assignedFiles.length, event.assignment.perspective),
+    });
+  }
+
+  private handleReviewAssignmentProgress(event: ReviewAssignmentProgressEvent): void {
+    if (event.progress.status === 'active') return;
+    this.appendReviewProgress({
+      state: 'progress',
+      title: `Reviewer ${event.progress.status}`,
+      detail: event.progress.summary ?? event.progress.blocker,
+    });
+  }
+
+  private handleReviewCommentAdded(event: ReviewCommentAddedEvent): void {
+    this.appendReviewProgress({
+      state: 'comment',
+      title: 'Review finding added',
+      detail: `${event.comment.severity}: ${event.comment.path}:${String(event.comment.line)} ${event.comment.title}`,
+    });
+  }
+
+  private handleReviewCommentMerged(event: ReviewCommentMergedEvent): void {
+    this.appendReviewProgress({
+      state: 'comment',
+      title: 'Review finding merged',
+      detail: `${event.comment.severity}: ${event.comment.path}:${String(event.comment.line)} ${event.comment.title}`,
+    });
+  }
+
+  private handleReviewCommentDismissed(event: ReviewCommentDismissedEvent): void {
+    this.appendReviewProgress({
+      state: 'comment',
+      title: 'Review finding dismissed',
+      detail: `${event.dismissal.reason}: ${event.dismissal.summary}`,
+    });
+  }
+
+  private handleReviewCompleted(event: ReviewCompletedEvent): void {
+    this.host.state.reviewActive = false;
+    this.appendReviewProgress({
+      state: 'completed',
+      title: event.status === 'complete' ? 'Review completed' : 'Review blocked',
+      detail: event.summary,
+    });
+  }
+
+  private handleReviewCancelled(_event: ReviewCancelledEvent): void {
+    this.host.state.reviewActive = false;
+    this.appendReviewProgress({
+      state: 'cancelled',
+      title: 'Review cancelled',
+    });
+  }
+
+  private handleReviewFailed(event: ReviewFailedEvent): void {
+    this.host.state.reviewActive = false;
+    this.appendReviewProgress({
+      state: 'failed',
+      title: 'Review failed',
+      detail: event.message,
+    });
+  }
+
+  private appendReviewProgress(data: NonNullable<TranscriptEntry['reviewData']>): void {
+    this.host.appendTranscriptEntry({
+      id: nextTranscriptId(),
+      kind: 'review',
+      renderMode: 'notice',
+      content: data.title,
+      reviewData: data,
     });
   }
 
@@ -1057,4 +1163,9 @@ export class SessionEventHandler {
     state.footer.setBackgroundCounts({ bashTasks, agentTasks });
     state.ui.requestRender();
   }
+}
+
+function assignmentDetail(fileCount: number, perspective: string | undefined): string {
+  const files = `${String(fileCount)} ${fileCount === 1 ? 'file' : 'files'}`;
+  return perspective === undefined ? files : `${perspective} · ${files}`;
 }

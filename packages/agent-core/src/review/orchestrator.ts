@@ -1,6 +1,7 @@
 import type { Kaos } from '@moonshot-ai/kaos';
 
 import { loadAgentsMd } from '../profile';
+import type { AgentEvent } from '../rpc/events';
 import { linkAbortSignal, userCancellationReason } from '../utils/abort';
 import {
   listReviewBaseRefs,
@@ -26,6 +27,14 @@ import type {
 import { ReviewWorkerDriver, type ReviewWorkerLauncher } from './worker-driver';
 import { ReviewRuntimeError, type SessionReviewRuntime } from './runtime';
 
+type ReviewOrchestratorEvent = Extract<
+  AgentEvent,
+  | { readonly type: 'review.started' }
+  | { readonly type: 'review.completed' }
+  | { readonly type: 'review.cancelled' }
+  | { readonly type: 'review.failed' }
+>;
+
 export interface ReviewOrchestratorOptions {
   readonly kaos: Kaos;
   readonly systemKaos?: Kaos;
@@ -36,6 +45,7 @@ export interface ReviewOrchestratorOptions {
   readonly parentToolCallUuid?: string;
   readonly signal?: AbortSignal;
   readonly loadRepoInstructions?: () => Promise<string>;
+  readonly emitEvent?: (event: ReviewOrchestratorEvent) => void;
 }
 
 export class ReviewOrchestrator {
@@ -95,6 +105,13 @@ export class ReviewOrchestrator {
         background,
       );
       reviewStarted = true;
+      this.emitEvent({
+        type: 'review.started',
+        target: preview.target,
+        intensity: input.intensity,
+        focus: input.focus,
+        stats: preview.stats,
+      });
 
       const assignment = this.options.runtime.createAssignment({
         role: 'reviewer',
@@ -126,15 +143,28 @@ export class ReviewOrchestrator {
         comments,
       };
       const summary = summarizeReviewResult(resultWithoutSummary);
-      return {
+      const result = {
         ...resultWithoutSummary,
         summary: worker.status === 'blocked' && worker.summary !== undefined
           ? `${summary}\n${worker.summary}`
           : summary,
       };
+      this.emitEvent({
+        type: 'review.completed',
+        status: result.status === 'blocked' ? 'blocked' : 'complete',
+        summary: result.summary,
+        comments: result.comments,
+      });
+      return result;
     } catch (error) {
       if (this.signal.aborted && reviewStarted) {
         this.options.runtime.clear();
+        this.emitEvent({ type: 'review.cancelled' });
+      } else {
+        this.emitEvent({
+          type: 'review.failed',
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
       throw error;
     } finally {
@@ -159,6 +189,10 @@ export class ReviewOrchestrator {
     }
     const kaos = this.options.systemKaos ?? this.options.kaos;
     return loadAgentsMd(kaos, this.options.kimiHomeDir);
+  }
+
+  private emitEvent(event: ReviewOrchestratorEvent): void {
+    this.options.emitEvent?.(event);
   }
 }
 

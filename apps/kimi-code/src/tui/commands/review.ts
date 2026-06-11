@@ -140,6 +140,10 @@ async function startReview(
     });
   } catch (error) {
     const message = formatErrorMessage(error);
+    if (message.toLowerCase().includes('aborted')) {
+      spinner.stop({ ok: false, label: 'Review cancelled.' });
+      return;
+    }
     spinner.stop({ ok: false, label: `Review failed: ${message}` });
     host.showError(`Review failed: ${message}`);
   }

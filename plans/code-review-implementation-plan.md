@@ -375,7 +375,7 @@ Purpose: make active reviews visible and stoppable without corrupting results.
 
 **Tasks:**
 
-- [ ] Add review events:
+- [x] Add review events:
   - `review.started`
   - `review.assignment.started`
   - `review.assignment.progress`
@@ -385,18 +385,18 @@ Purpose: make active reviews visible and stoppable without corrupting results.
   - `review.completed`
   - `review.cancelled`
   - `review.failed`
-- [ ] Render a compact review progress block in the transcript or activity area.
-- [ ] During an active review, make `Esc` show confirmation:
+- [x] Render a compact review progress block in the transcript or activity area.
+- [x] During an active review, make `Esc` show confirmation:
   - title: `Stop review?`
   - body: `Running reviewers will be cancelled. Partial findings may be lost.`
-- [ ] On confirmation, call `session.cancelReview()`.
-- [ ] Ensure selector-stage `Esc` still cancels normally.
-- [ ] Avoid showing partial comments as complete review output after cancellation.
+- [x] On confirmation, call `session.cancelReview()`.
+- [x] Ensure selector-stage `Esc` still cancels normally.
+- [x] Avoid showing partial comments as complete review output after cancellation.
 
 **Verification:**
 
-- [ ] Run `pnpm --filter @moonshot-ai/kimi-code exec vitest run apps/kimi-code/test/tui/controllers/session-event-handler-review.test.ts`.
-- [ ] Run `pnpm --filter @moonshot-ai/kimi-code exec vitest run apps/kimi-code/test/tui/components/messages/review-progress.test.ts`.
+- [x] Run `pnpm --filter @moonshot-ai/kimi-code exec vitest run apps/kimi-code/test/tui/controllers/session-event-handler-review.test.ts`. Executed with `test/tui/controllers/session-event-handler-review.test.ts test/tui/components/messages/review-progress.test.ts` because Vitest runs from the package directory.
+- [x] Run `pnpm --filter @moonshot-ai/kimi-code exec vitest run apps/kimi-code/test/tui/components/messages/review-progress.test.ts`. Executed with `test/tui/controllers/session-event-handler-review.test.ts test/tui/components/messages/review-progress.test.ts` because Vitest runs from the package directory.
 
 ## Phase 10: Thorough Review and Single Reconciliator
 
