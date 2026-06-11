@@ -12,6 +12,7 @@ import type {
   GetBackgroundPayload,
   McpServerInfo,
   McpStartupMetrics,
+  PreviewReviewTargetPayload,
   PromptPayload,
   ReconnectMcpServerPayload,
   RenameSessionPayload,
@@ -22,6 +23,7 @@ import type {
   SetPermissionPayload,
   SetThinkingPayload,
   SkillSummary,
+  StartReviewPayload,
   SteerPayload,
   StopBackgroundPayload,
   UndoHistoryPayload,
@@ -88,6 +90,26 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   generateAgentsMd(_payload: EmptyPayload): Promise<void> {
     return this.session.generateAgentsMd();
+  }
+
+  listReviewBaseRefs(_payload: EmptyPayload) {
+    return this.session.listReviewBaseRefs();
+  }
+
+  listReviewCommits(_payload: EmptyPayload) {
+    return this.session.listReviewCommits();
+  }
+
+  previewReviewTarget(payload: PreviewReviewTargetPayload) {
+    return this.session.previewReviewTarget(payload.target);
+  }
+
+  startReview(payload: StartReviewPayload) {
+    return this.session.startReview(payload);
+  }
+
+  cancelReview(_payload: EmptyPayload): void {
+    this.session.cancelReview();
   }
 
 

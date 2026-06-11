@@ -108,6 +108,14 @@ export interface ReviewProgress {
   readonly blocker?: string;
 }
 
+export interface ReviewBackground {
+  readonly target: ReviewTarget;
+  readonly intensity: ReviewIntensity;
+  readonly focus?: string;
+  readonly stats: ReviewDiffStats;
+  readonly repoInstructions?: string;
+}
+
 export interface ReviewStartInput {
   readonly target: ReviewTarget;
   readonly intensity: ReviewIntensity;
@@ -130,4 +138,25 @@ export interface ReviewCommit {
   readonly title: string;
   readonly author?: string;
   readonly date?: string;
+}
+
+export interface ReviewFinalComment {
+  readonly id: string;
+  readonly sourceCommentIds: readonly string[];
+  readonly severity: ReviewCommentSeverity;
+  readonly path: string;
+  readonly line: number;
+  readonly title: string;
+  readonly body: string;
+  readonly evidence?: string;
+  readonly suggestedFix?: string;
+}
+
+export interface ReviewResult {
+  readonly target: ReviewTarget;
+  readonly intensity: ReviewIntensity;
+  readonly status: ReviewProgressStatus;
+  readonly stats: ReviewDiffStats;
+  readonly summary: string;
+  readonly comments: readonly ReviewFinalComment[];
 }

@@ -14,6 +14,7 @@ import {
 } from './coverage';
 import type {
   ReviewAssignment,
+  ReviewBackground,
   ReviewComment,
   ReviewDiffStats,
   ReviewDismissedComment,
@@ -35,6 +36,7 @@ export interface ReviewRuntimeRun {
   readonly intensity: ReviewStartInput['intensity'];
   readonly focus?: string;
   readonly stats?: ReviewDiffStats;
+  readonly background?: ReviewBackground;
   readonly startedAt: number;
 }
 
@@ -90,7 +92,11 @@ export class SessionReviewRuntime {
     this.idGenerator = options.idGenerator ?? ((prefix) => `${prefix}-${randomUUID()}`);
   }
 
-  startReview(input: ReviewStartInput, stats?: ReviewDiffStats): ReviewRuntimeRun {
+  startReview(
+    input: ReviewStartInput,
+    stats?: ReviewDiffStats,
+    background?: ReviewBackground,
+  ): ReviewRuntimeRun {
     if (this.activeRun !== null) {
       throw new ReviewRuntimeError('A review is already active');
     }
@@ -99,6 +105,7 @@ export class SessionReviewRuntime {
       intensity: input.intensity,
       focus: input.focus,
       stats,
+      background,
       startedAt: Date.now(),
     };
     this.activeRun = run;

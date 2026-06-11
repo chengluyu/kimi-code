@@ -67,6 +67,7 @@ import type {
   McpStartupMetrics,
   PluginInfo,
   PluginSummary,
+  PreviewReviewTargetPayload,
   PromptPayload,
   ReconnectMcpServerPayload,
   RegisterToolPayload,
@@ -86,6 +87,7 @@ import type {
   SetPluginMcpServerEnabledPayload,
   SetThinkingPayload,
   SkillSummary,
+  StartReviewPayload,
   SteerPayload,
   StopBackgroundPayload,
   UndoHistoryPayload,
@@ -654,6 +656,29 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
 
   generateAgentsMd({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>): Promise<void> {
     return this.sessionApi(sessionId).generateAgentsMd(payload);
+  }
+
+  listReviewBaseRefs({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>) {
+    return this.sessionApi(sessionId).listReviewBaseRefs(payload);
+  }
+
+  listReviewCommits({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>) {
+    return this.sessionApi(sessionId).listReviewCommits(payload);
+  }
+
+  previewReviewTarget({
+    sessionId,
+    ...payload
+  }: SessionScopedPayload<PreviewReviewTargetPayload>) {
+    return this.sessionApi(sessionId).previewReviewTarget(payload);
+  }
+
+  startReview({ sessionId, ...payload }: SessionScopedPayload<StartReviewPayload>) {
+    return this.sessionApi(sessionId).startReview(payload);
+  }
+
+  cancelReview({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>): void {
+    return this.sessionApi(sessionId).cancelReview(payload);
   }
 
   startBtw({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>): Promise<string> {

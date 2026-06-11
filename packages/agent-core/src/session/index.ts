@@ -40,7 +40,19 @@ import { noopTelemetryClient, type TelemetryClient } from '../telemetry';
 import { SessionSubagentHost } from './subagent-host';
 import type { ToolServices } from '../tools/support/services';
 import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
-import { SessionReviewRuntime } from '../review';
+import {
+  listReviewBaseRefs,
+  listReviewCommits,
+  previewReviewOrchestratorTarget,
+  ReviewOrchestrator,
+  SessionReviewRuntime,
+  type ReviewBaseRef,
+  type ReviewCommit,
+  type ReviewResult,
+  type ReviewStartInput,
+  type ReviewTarget,
+  type ReviewTargetPreview,
+} from '../review';
 
 export interface SessionOptions {
   readonly kaos: Kaos;
@@ -120,6 +132,7 @@ export class Session {
   readonly hookEngine: HookEngine;
   readonly experimentalFlags: ExperimentalFlagResolver;
   readonly review = new SessionReviewRuntime();
+  private activeReviewOrchestrator: ReviewOrchestrator | undefined;
   private toolKaos: Kaos;
   private persistenceKaos: Kaos;
   private agentIdCounter = 0;
@@ -358,6 +371,60 @@ export class Session {
         { cause: error },
       );
     }
+  }
+
+  async listReviewBaseRefs(): Promise<readonly ReviewBaseRef[]> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    return listReviewBaseRefs(mainAgent.kaos);
+  }
+
+  async listReviewCommits(): Promise<readonly ReviewCommit[]> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    return listReviewCommits(mainAgent.kaos);
+  }
+
+  async previewReviewTarget(target: ReviewTarget): Promise<ReviewTargetPreview> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    return previewReviewOrchestratorTarget(mainAgent.kaos, target);
+  }
+
+  async startReview(input: ReviewStartInput): Promise<ReviewResult> {
+    this.assertCodeReviewEnabled();
+    if (this.hasActiveTurn) {
+      throw new KimiError(
+        ErrorCodes.TURN_AGENT_BUSY,
+        'Cannot start a review while another turn is running',
+      );
+    }
+    const mainAgent = await this.ensureAgentResumed('main');
+    const orchestrator = new ReviewOrchestrator({
+      kaos: mainAgent.kaos,
+      systemKaos: this.systemContextKaos(mainAgent.kaos.getcwd()),
+      kimiHomeDir: this.options.kimiHomeDir,
+      runtime: this.review,
+      launcher: mainAgent.subagentHost!,
+      parentToolCallId: 'review',
+    });
+    this.activeReviewOrchestrator = orchestrator;
+    try {
+      return await orchestrator.start(input);
+    } finally {
+      if (this.activeReviewOrchestrator === orchestrator) {
+        this.activeReviewOrchestrator = undefined;
+      }
+    }
+  }
+
+  cancelReview(): void {
+    this.assertCodeReviewEnabled();
+    if (this.activeReviewOrchestrator === undefined) {
+      this.review.clear();
+      return;
+    }
+    this.activeReviewOrchestrator.cancel();
   }
 
   get hasActiveTurn(): boolean {
@@ -601,6 +668,14 @@ export class Session {
       throw new KimiError(ErrorCodes.AGENT_NOT_FOUND, 'Main agent was not found');
     }
     return agent;
+  }
+
+  private assertCodeReviewEnabled(): void {
+    if (this.experimentalFlags.enabled('code_review')) return;
+    throw new KimiError(
+      ErrorCodes.REQUEST_INVALID,
+      'Code review is experimental. Enable KIMI_CODE_EXPERIMENTAL_CODE_REVIEW to use review RPC methods.',
+    );
   }
 
   private async triggerSessionStart(source: 'startup' | 'resume'): Promise<void> {

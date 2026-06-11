@@ -21,6 +21,14 @@ import type { SessionMeta } from '#/session';
 import type { ContentPart } from '@moonshot-ai/kosong';
 
 import type { PluginInfo, PluginSummary, ReloadSummary } from '#/plugin';
+import type {
+  ReviewBaseRef,
+  ReviewCommit,
+  ReviewResult,
+  ReviewStartInput,
+  ReviewTarget,
+  ReviewTargetPreview,
+} from '#/review';
 import type { UsageStatus } from './events';
 import type { WithAgentId, WithSessionId } from './types';
 
@@ -289,6 +297,12 @@ export interface CreateGoalPayload {
   readonly replace?: boolean;
 }
 
+export interface PreviewReviewTargetPayload {
+  readonly target: ReviewTarget;
+}
+
+export type StartReviewPayload = ReviewStartInput;
+
 export interface GetKimiConfigPayload {
   readonly reload?: boolean;
 }
@@ -349,6 +363,11 @@ export interface SessionAPI extends AgentAPIWithId {
   getMcpStartupMetrics: (payload: EmptyPayload) => McpStartupMetrics;
   reconnectMcpServer: (payload: ReconnectMcpServerPayload) => void;
   generateAgentsMd: (payload: EmptyPayload) => void;
+  listReviewBaseRefs: (payload: EmptyPayload) => readonly ReviewBaseRef[];
+  listReviewCommits: (payload: EmptyPayload) => readonly ReviewCommit[];
+  previewReviewTarget: (payload: PreviewReviewTargetPayload) => ReviewTargetPreview;
+  startReview: (payload: StartReviewPayload) => ReviewResult;
+  cancelReview: (payload: EmptyPayload) => void;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;

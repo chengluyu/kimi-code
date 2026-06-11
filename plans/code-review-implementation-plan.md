@@ -268,24 +268,24 @@ Purpose: deliver the first end-to-end useful review mode.
 
 **Tasks:**
 
-- [ ] Implement `startReview(input)` for `standard` intensity.
-- [ ] Build review background packet from target, focus, diff stats, changed file manifest, and relevant repository instructions.
-- [ ] Create one reviewer assignment covering all changed files.
-- [ ] Run one `reviewer` worker with the worker driver.
-- [ ] Convert audited candidate comments directly into final comments for Standard.
-- [ ] Emit a final assistant-facing review summary.
-- [ ] Add RPC method and payload types for:
+- [x] Implement `startReview(input)` for `standard` intensity.
+- [x] Build review background packet from target, focus, diff stats, changed file manifest, and relevant repository instructions.
+- [x] Create one reviewer assignment covering all changed files.
+- [x] Run one `reviewer` worker with the worker driver.
+- [x] Convert audited candidate comments directly into final comments for Standard.
+- [x] Emit a final assistant-facing review summary.
+- [x] Add RPC method and payload types for:
   - list base refs
   - list commits
   - preview target
   - start review
   - cancel review
-- [ ] Gate all review methods behind `code_review`.
-- [ ] Test no-finding, one-finding, missing-coverage retry, and cancellation paths.
+- [x] Gate all review methods behind `code_review`.
+- [x] Test no-finding, one-finding, missing-coverage retry, and cancellation paths.
 
 **Verification:**
 
-- [ ] Run `pnpm --filter @moonshot-ai/agent-core exec vitest run packages/agent-core/test/review/orchestrator-standard.test.ts`.
+- [x] Run `pnpm --filter @moonshot-ai/agent-core exec vitest run packages/agent-core/test/review/orchestrator-standard.test.ts`. Executed as `pnpm --filter @moonshot-ai/agent-core exec vitest run test/review/orchestrator-standard.test.ts` because Vitest runs from the package directory.
 
 ## Phase 7: SDK Review API
 
