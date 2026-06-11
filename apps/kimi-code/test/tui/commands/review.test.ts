@@ -74,6 +74,7 @@ function makeHost(input: {
       appState: {
         model: 'kimi-model',
       },
+      reviewActive: false,
       theme: currentTheme,
       ui: { requestRender: vi.fn() },
     },
@@ -142,6 +143,25 @@ describe('handleReviewCommand', () => {
     expect(host.showTransientStatus).toHaveBeenCalledWith('Reviewing 1 file: +2 -1.');
     expect(transientStatusClear).toHaveBeenCalledTimes(1);
     expect(session.startReview).not.toHaveBeenCalled();
+  });
+
+  it('does not show a duplicate command error after a review failure event', async () => {
+    const { host, session, spinnerStop } = makeHost();
+    session.startReview.mockImplementationOnce(async () => {
+      host.state.reviewActive = false;
+      throw new Error('Rate limited');
+    });
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    mountedPicker(host, 0).handleInput(ENTER);
+    await waitForPicker(host, 2);
+    mountedPicker(host, 1).handleInput(ENTER);
+    await task;
+
+    expect(spinnerStop).toHaveBeenCalledWith({ ok: false, label: 'Review stopped.' });
+    expect(host.showError).not.toHaveBeenCalled();
+    expect(host.appendTranscriptEntry).not.toHaveBeenCalled();
   });
 
   it('selects a base ref for current-branch review', async () => {

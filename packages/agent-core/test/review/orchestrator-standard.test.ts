@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { APIProviderRateLimitError } from '@moonshot-ai/kosong';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -12,6 +13,7 @@ import {
   type ReviewAgentFacade,
   type ReviewWorkerLauncher,
 } from '../../src/review';
+import type { AgentEvent } from '../../src/rpc/events';
 import type {
   RunSubagentOptions,
   SpawnSubagentOptions,
@@ -120,12 +122,52 @@ describe('ReviewOrchestrator standard review', () => {
       expect(runtime.getComments()).toEqual([]);
     });
   });
+
+  it('emits a structured provider error when reviewer execution fails', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const events: AgentEvent[] = [];
+      const launcher: ReviewWorkerLauncher = {
+        spawn: vi.fn(async (_options: SpawnSubagentOptions) =>
+          handle(Promise.reject(new APIProviderRateLimitError('Rate limited', 'req-429'))),
+        ),
+        resume: vi.fn(),
+      };
+
+      await expect(
+        createOrchestrator(repo, runtime, launcher, (event) => {
+          events.push(event);
+        }).start({
+          target: { scope: 'working_tree' },
+          intensity: 'standard',
+        }),
+      ).rejects.toThrow('Rate limited');
+
+      expect(runtime.getActiveRun()).toBeNull();
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'review.failed',
+          message: 'Rate limited',
+          error: expect.objectContaining({
+            code: 'provider.rate_limit',
+            message: 'Rate limited',
+            details: expect.objectContaining({
+              statusCode: 429,
+              requestId: 'req-429',
+            }),
+            retryable: true,
+          }),
+        }),
+      );
+    });
+  });
 });
 
 function createOrchestrator(
   repo: string,
   runtime: SessionReviewRuntime,
   launcher: ReviewWorkerLauncher,
+  emitEvent?: (event: AgentEvent) => void,
 ): ReviewOrchestrator {
   const kaos = testKaos.withCwd(repo);
   return new ReviewOrchestrator({
@@ -133,6 +175,7 @@ function createOrchestrator(
     runtime,
     launcher,
     loadRepoInstructions: async () => 'Review repo instructions.',
+    emitEvent,
   });
 }
 

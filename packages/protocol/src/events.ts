@@ -424,6 +424,7 @@ export interface ReviewCancelledEvent {
 export interface ReviewFailedEvent {
   readonly type: 'review.failed';
   readonly message: string;
+  readonly error?: KimiErrorPayload;
 }
 
 export interface SkillActivatedEvent {

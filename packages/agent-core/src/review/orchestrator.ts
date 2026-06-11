@@ -6,6 +6,7 @@ import type {
   QueuedSubagentRunResult,
   QueuedSubagentTask,
 } from '../session/subagent-host';
+import { toKimiErrorPayload } from '../errors';
 import { linkAbortSignal, userCancellationReason } from '../utils/abort';
 import { createDeepCoverageMatrix } from './coverage-matrix';
 import {
@@ -198,9 +199,11 @@ export class ReviewOrchestrator {
         this.options.runtime.clear();
         this.emitEvent({ type: 'review.cancelled' });
       } else {
+        const payload = toKimiErrorPayload(error);
         this.emitEvent({
           type: 'review.failed',
-          message: error instanceof Error ? error.message : String(error),
+          message: payload.message,
+          error: payload,
         });
       }
       throw error;

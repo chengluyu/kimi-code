@@ -424,8 +424,8 @@ export class SessionEventHandler {
     this.finishReviewAgentSwarm(event.message, true);
     this.appendReviewProgress({
       state: 'failed',
-      title: 'Review failed',
-      detail: event.message,
+      title: reviewFailureTitle(event),
+      detail: reviewFailureDetail(event),
     });
   }
 
@@ -1191,6 +1191,28 @@ export class SessionEventHandler {
     }
     state.footer.setBackgroundCounts({ bashTasks, agentTasks });
     state.ui.requestRender();
+  }
+}
+
+function reviewFailureTitle(event: ReviewFailedEvent): string {
+  return event.error?.code.startsWith('provider.') === true
+    ? 'Review stopped'
+    : 'Review failed';
+}
+
+function reviewFailureDetail(event: ReviewFailedEvent): string {
+  const error = event.error;
+  if (error === undefined) return event.message;
+  const formatted = formatErrorPayload(error);
+  switch (error.code) {
+    case 'provider.rate_limit':
+      return `The reviewer model returned a rate-limit error. You can retry the review or continue chatting. ${formatted}`;
+    case 'provider.api_error':
+    case 'provider.auth_error':
+    case 'provider.connection_error':
+      return `The reviewer model returned an error. You can retry the review or continue chatting. ${formatted}`;
+    default:
+      return formatted;
   }
 }
 

@@ -152,6 +152,31 @@ describe('SessionEventHandler review events', () => {
     expect(host.state.reviewActive).toBe(false);
   });
 
+  it('renders provider review failures as a stopped review', () => {
+    const host = makeHost();
+    const handler = new SessionEventHandler(host);
+
+    handler.handleEvent(reviewStartedEvent(), vi.fn());
+    handler.handleEvent({
+      ...reviewFailedEvent(),
+      message: 'Rate limited',
+      error: {
+        code: 'provider.rate_limit',
+        message: 'Rate limited',
+        name: 'APIProviderRateLimitError',
+        details: { statusCode: 429, requestId: 'req-429' },
+        retryable: true,
+      },
+    } as any, vi.fn());
+
+    expect(host.state.reviewActive).toBe(false);
+    expect(appendedEntries(host).at(-1)?.reviewData).toMatchObject({
+      title: 'Review stopped',
+      detail: expect.stringContaining('rate-limit error'),
+    });
+    expect(appendedEntries(host).at(-1)?.reviewData?.detail).toContain('[provider.rate_limit]');
+  });
+
   it('starts AgentSwarm progress for Deep review reviewer phase', () => {
     const host = makeHost();
     const handler = new SessionEventHandler(host);
