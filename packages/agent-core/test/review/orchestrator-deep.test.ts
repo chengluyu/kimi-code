@@ -26,6 +26,30 @@ import { testKaos } from '../fixtures/test-kaos';
 const execFileAsync = promisify(execFile);
 
 describe('ReviewOrchestrator deep review', () => {
+  it('previews the deep reviewer plan', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const launcher = createLauncher({});
+
+      const plan = await createOrchestrator(repo, runtime, launcher).previewPlan({
+        target: { scope: 'working_tree' },
+        intensity: 'deep',
+      });
+
+      expect(plan).toMatchObject({
+        intensity: 'deep',
+        reviewerCount: 8,
+        perspectives: [...DEEP_REVIEW_PERSPECTIVES],
+        reconciliationGroups: [...DEEP_REVIEW_PERSPECTIVES],
+      });
+      expect(plan.fileGroups).toHaveLength(2);
+      expect(plan.fileGroups?.[0]).toMatchObject({
+        label: 'Files 1-4',
+        perspectives: [...DEEP_REVIEW_PERSPECTIVES],
+      });
+    });
+  });
+
   it('runs full-file reviewer groups and perspective reconciliators', async () => {
     await withModifiedRepo(async (repo, paths) => {
       const runtime = createRuntime();

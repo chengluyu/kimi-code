@@ -25,6 +25,7 @@ import type {
   ResumedSessionSummary,
   ReviewBaseRef,
   ReviewCommit,
+  ReviewPlanPreview,
   ReviewResult,
   ReviewStartInput,
   ReviewTarget,
@@ -257,6 +258,11 @@ export class Session {
   async previewReviewTarget(target: ReviewTarget): Promise<ReviewTargetPreview> {
     this.ensureOpen();
     return this.rpc.previewReviewTarget({ sessionId: this.id, target });
+  }
+
+  async previewReviewPlan(input: ReviewStartInput): Promise<ReviewPlanPreview> {
+    this.ensureOpen();
+    return this.rpc.previewReviewPlan({ sessionId: this.id, ...input });
   }
 
   async startReview(input: ReviewStartInput): Promise<ReviewResult> {

@@ -70,6 +70,7 @@ export type {
   ReviewFinalComment,
   ReviewIntensity,
   ReviewMergedComment,
+  ReviewPlanPreview,
   ReviewProgress,
   ReviewProgressStatus,
   ReviewResult,

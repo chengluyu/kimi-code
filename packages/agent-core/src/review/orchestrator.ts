@@ -8,7 +8,10 @@ import type {
 } from '../session/subagent-host';
 import { toKimiErrorPayload } from '../errors';
 import { linkAbortSignal, userCancellationReason } from '../utils/abort';
-import { createDeepCoverageMatrix } from './coverage-matrix';
+import {
+  createDeepCoverageMatrix,
+  DEEP_REVIEW_PERSPECTIVES,
+} from './coverage-matrix';
 import {
   listReviewBaseRefs,
   listReviewCommits,
@@ -32,6 +35,7 @@ import type {
   ReviewCommit,
   ReviewDiffStats,
   ReviewFinalComment,
+  ReviewPlanPreview,
   ReviewProgressStatus,
   ReviewResult,
   ReviewStartInput,
@@ -140,6 +144,13 @@ export class ReviewOrchestrator {
     const stats = await previewReviewTarget(this.options.kaos, resolved);
     this.signal.throwIfAborted();
     return { target: resolved, stats };
+  }
+
+  async previewPlan(input: ReviewStartInput): Promise<ReviewPlanPreview> {
+    this.signal.throwIfAborted();
+    const preview = await this.previewTarget(input.target);
+    this.signal.throwIfAborted();
+    return buildReviewPlanPreview(input.intensity, preview.stats);
   }
 
   async start(input: ReviewStartInput): Promise<ReviewResult> {
@@ -615,4 +626,46 @@ export async function previewReviewOrchestratorTarget(
   const resolved = await resolveReviewTarget(kaos, target);
   const stats: ReviewDiffStats = await previewReviewTarget(kaos, resolved);
   return { target: resolved, stats };
+}
+
+export async function previewReviewOrchestratorPlan(
+  kaos: Kaos,
+  input: ReviewStartInput,
+): Promise<ReviewPlanPreview> {
+  const preview = await previewReviewOrchestratorTarget(kaos, input.target);
+  return buildReviewPlanPreview(input.intensity, preview.stats);
+}
+
+function buildReviewPlanPreview(
+  intensity: ReviewStartInput['intensity'],
+  stats: ReviewDiffStats,
+): ReviewPlanPreview {
+  switch (intensity) {
+    case 'standard':
+      return {
+        intensity,
+        reviewerCount: 1,
+        perspectives: ['standard'],
+      };
+    case 'thorough':
+      return {
+        intensity,
+        reviewerCount: THOROUGH_REVIEW_PERSPECTIVES.length,
+        perspectives: [...THOROUGH_REVIEW_PERSPECTIVES],
+      };
+    case 'deep': {
+      const matrix = createDeepCoverageMatrix({ files: stats.files });
+      return {
+        intensity,
+        reviewerCount: matrix.reviewerAssignments.length,
+        perspectives: [...DEEP_REVIEW_PERSPECTIVES],
+        fileGroups: matrix.fileGroups.map((group) => ({
+          label: group.name,
+          files: group.files,
+          perspectives: matrix.perspectives,
+        })),
+        reconciliationGroups: matrix.reconciliationGroups.map((group) => group.label),
+      };
+    }
+  }
 }

@@ -43,11 +43,13 @@ import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
 import {
   listReviewBaseRefs,
   listReviewCommits,
+  previewReviewOrchestratorPlan,
   previewReviewOrchestratorTarget,
   ReviewOrchestrator,
   SessionReviewRuntime,
   type ReviewBaseRef,
   type ReviewCommit,
+  type ReviewPlanPreview,
   type ReviewResult,
   type ReviewStartInput,
   type ReviewTarget,
@@ -406,6 +408,12 @@ export class Session {
     this.assertCodeReviewEnabled();
     const mainAgent = await this.ensureAgentResumed('main');
     return previewReviewOrchestratorTarget(mainAgent.kaos, target);
+  }
+
+  async previewReviewPlan(input: ReviewStartInput): Promise<ReviewPlanPreview> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    return previewReviewOrchestratorPlan(mainAgent.kaos, input);
   }
 
   async startReview(input: ReviewStartInput): Promise<ReviewResult> {

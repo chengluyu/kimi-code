@@ -127,6 +127,20 @@ export interface ReviewTargetPreview {
   readonly stats: ReviewDiffStats;
 }
 
+export interface ReviewPlanFileGroup {
+  readonly label: string;
+  readonly files: readonly string[];
+  readonly perspectives: readonly string[];
+}
+
+export interface ReviewPlanPreview {
+  readonly intensity: ReviewIntensity;
+  readonly reviewerCount: number;
+  readonly perspectives: readonly string[];
+  readonly fileGroups?: readonly ReviewPlanFileGroup[];
+  readonly reconciliationGroups?: readonly string[];
+}
+
 export interface ReviewBaseRef {
   readonly name: string;
   readonly kind: 'branch' | 'tag' | 'commit';

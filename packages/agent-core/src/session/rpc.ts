@@ -12,6 +12,7 @@ import type {
   GetBackgroundPayload,
   McpServerInfo,
   McpStartupMetrics,
+  PreviewReviewPlanPayload,
   PreviewReviewTargetPayload,
   PromptPayload,
   ReconnectMcpServerPayload,
@@ -102,6 +103,10 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   previewReviewTarget(payload: PreviewReviewTargetPayload) {
     return this.session.previewReviewTarget(payload.target);
+  }
+
+  previewReviewPlan(payload: PreviewReviewPlanPayload) {
+    return this.session.previewReviewPlan(payload);
   }
 
   startReview(payload: StartReviewPayload) {

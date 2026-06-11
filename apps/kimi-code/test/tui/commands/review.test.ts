@@ -2,6 +2,7 @@ import type {
   ReviewBaseRef,
   ReviewCommit,
   ReviewIntensity,
+  ReviewPlanPreview,
   ReviewResult,
   ReviewTargetPreview,
 } from '@moonshot-ai/kimi-code-sdk';
@@ -57,6 +58,50 @@ function result(
   };
 }
 
+function plan(intensity: ReviewIntensity): ReviewPlanPreview {
+  if (intensity === 'deep') {
+    return {
+      intensity,
+      reviewerCount: 4,
+      perspectives: [
+        'Correctness and regressions',
+        'Security and data safety',
+        'Reliability and edge cases',
+        'Maintainability and tests',
+      ],
+      fileGroups: [
+        {
+          label: 'Files 1-1',
+          files: ['src/a.ts'],
+          perspectives: [
+            'Correctness and regressions',
+            'Security and data safety',
+            'Reliability and edge cases',
+            'Maintainability and tests',
+          ],
+        },
+      ],
+      reconciliationGroups: [
+        'Correctness and regressions',
+        'Security and data safety',
+        'Reliability and edge cases',
+        'Maintainability and tests',
+      ],
+    };
+  }
+  return {
+    intensity,
+    reviewerCount: intensity === 'thorough' ? 3 : 1,
+    perspectives: intensity === 'thorough'
+      ? [
+        'Correctness and regressions',
+        'Security and data safety',
+        'Maintainability and tests',
+      ]
+      : ['standard'],
+  };
+}
+
 function makeHost(input: {
   readonly refs?: readonly ReviewBaseRef[];
   readonly commits?: readonly ReviewCommit[];
@@ -66,6 +111,7 @@ function makeHost(input: {
     listReviewBaseRefs: vi.fn(async () => input.refs ?? [{ name: 'main', kind: 'branch' }]),
     listReviewCommits: vi.fn(async () => input.commits ?? [{ sha: 'abc123', title: 'change' }]),
     previewReviewTarget: vi.fn(async (target) => preview(target)),
+    previewReviewPlan: vi.fn(async (reviewInput) => plan(reviewInput.intensity)),
     startReview: vi.fn(async (reviewInput) => result(reviewInput.target, reviewInput.intensity)),
   };
   const spinnerStop = vi.fn();
@@ -227,17 +273,42 @@ describe('handleReviewCommand', () => {
     await waitForPicker(host, 2);
     mountedPicker(host, 1).handleInput(DOWN);
     mountedPicker(host, 1).handleInput(ENTER);
+    await waitForPicker(host, 3);
+    const confirmationLines = strippedPickerLines(host, 2);
+    expect(confirmationLines.join('\n')).toContain('Correctness and regressions');
+    expect(confirmationLines.join('\n')).toContain('3 reviewer agents');
+    mountedPicker(host, 2).handleInput(ENTER);
     await task;
 
-    expect(host.showNotice).toHaveBeenCalledWith(
-      'Thorough review',
-      expect.stringContaining('Correctness and regressions'),
-    );
+    expect(host.showNotice).not.toHaveBeenCalled();
+    expect(session.previewReviewPlan).toHaveBeenCalledWith({
+      target: workingTreePreview.target,
+      intensity: 'thorough',
+      focus: undefined,
+    });
     expect(session.startReview).toHaveBeenCalledWith({
       target: workingTreePreview.target,
       intensity: 'thorough',
       focus: undefined,
     });
+  });
+
+  it('cancels at the perspective confirmation before starting review', async () => {
+    const { host, session, transientStatusClear } = makeHost();
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    mountedPicker(host, 0).handleInput(ENTER);
+    await waitForPicker(host, 2);
+    mountedPicker(host, 1).handleInput(DOWN);
+    mountedPicker(host, 1).handleInput(ENTER);
+    await waitForPicker(host, 3);
+    mountedPicker(host, 2).handleInput(ESC);
+    await task;
+
+    expect(session.previewReviewPlan).toHaveBeenCalled();
+    expect(session.startReview).not.toHaveBeenCalled();
+    expect(transientStatusClear).toHaveBeenCalledTimes(1);
   });
 
   it('selects a single commit and starts a Deep review', async () => {
@@ -256,6 +327,11 @@ describe('handleReviewCommand', () => {
     mountedPicker(host, 2).handleInput(DOWN);
     mountedPicker(host, 2).handleInput(DOWN);
     mountedPicker(host, 2).handleInput(ENTER);
+    await waitForPicker(host, 4);
+    const confirmationLines = strippedPickerLines(host, 3);
+    expect(confirmationLines.join('\n')).toContain('Reliability and edge cases');
+    expect(confirmationLines.join('\n')).toContain('4 reviewer agents');
+    mountedPicker(host, 3).handleInput(ENTER);
     await task;
 
     expect(session.listReviewCommits).toHaveBeenCalled();
@@ -263,9 +339,12 @@ describe('handleReviewCommand', () => {
       scope: 'single_commit',
       commit: 'abc123def456',
     });
-    expect(host.showNotice).toHaveBeenCalledWith(
-      'Deep review',
-      expect.stringContaining('overlapping focused reviewers'),
+    expect(host.showNotice).not.toHaveBeenCalled();
+    expect(session.previewReviewPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({ scope: 'single_commit', commit: 'abc123def456' }),
+        intensity: 'deep',
+      }),
     );
     expect(session.startReview).toHaveBeenCalledWith(
       expect.objectContaining({

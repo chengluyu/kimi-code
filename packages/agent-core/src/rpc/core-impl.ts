@@ -67,6 +67,7 @@ import type {
   McpStartupMetrics,
   PluginInfo,
   PluginSummary,
+  PreviewReviewPlanPayload,
   PreviewReviewTargetPayload,
   PromptPayload,
   ReconnectMcpServerPayload,
@@ -671,6 +672,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     ...payload
   }: SessionScopedPayload<PreviewReviewTargetPayload>) {
     return this.sessionApi(sessionId).previewReviewTarget(payload);
+  }
+
+  previewReviewPlan({ sessionId, ...payload }: SessionScopedPayload<PreviewReviewPlanPayload>) {
+    return this.sessionApi(sessionId).previewReviewPlan(payload);
   }
 
   startReview({ sessionId, ...payload }: SessionScopedPayload<StartReviewPayload>) {

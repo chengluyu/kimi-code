@@ -25,6 +25,24 @@ import { testKaos } from '../fixtures/test-kaos';
 const execFileAsync = promisify(execFile);
 
 describe('ReviewOrchestrator thorough review', () => {
+  it('previews the focused reviewer plan', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const launcher = createLauncher({});
+
+      const plan = await createOrchestrator(repo, runtime, launcher).previewPlan({
+        target: { scope: 'working_tree' },
+        intensity: 'thorough',
+      });
+
+      expect(plan).toMatchObject({
+        intensity: 'thorough',
+        reviewerCount: THOROUGH_REVIEW_PERSPECTIVES.length,
+        perspectives: [...THOROUGH_REVIEW_PERSPECTIVES],
+      });
+    });
+  });
+
   it('runs focused reviewers and reconciles their candidate comments', async () => {
     await withModifiedRepo(async (repo) => {
       const runtime = createRuntime();

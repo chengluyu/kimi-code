@@ -24,6 +24,7 @@ import type { PluginInfo, PluginSummary, ReloadSummary } from '#/plugin';
 import type {
   ReviewBaseRef,
   ReviewCommit,
+  ReviewPlanPreview,
   ReviewResult,
   ReviewStartInput,
   ReviewTarget,
@@ -301,6 +302,8 @@ export interface PreviewReviewTargetPayload {
   readonly target: ReviewTarget;
 }
 
+export type PreviewReviewPlanPayload = ReviewStartInput;
+
 export type StartReviewPayload = ReviewStartInput;
 
 export interface GetKimiConfigPayload {
@@ -366,6 +369,7 @@ export interface SessionAPI extends AgentAPIWithId {
   listReviewBaseRefs: (payload: EmptyPayload) => readonly ReviewBaseRef[];
   listReviewCommits: (payload: EmptyPayload) => readonly ReviewCommit[];
   previewReviewTarget: (payload: PreviewReviewTargetPayload) => ReviewTargetPreview;
+  previewReviewPlan: (payload: PreviewReviewPlanPayload) => ReviewPlanPreview;
   startReview: (payload: StartReviewPayload) => ReviewResult;
   cancelReview: (payload: EmptyPayload) => void;
 }

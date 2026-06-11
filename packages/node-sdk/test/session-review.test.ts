@@ -6,6 +6,7 @@ import { SDKRpcClientBase } from '#/rpc';
 import { Session } from '#/session';
 import type {
   ReviewResult,
+  ReviewPlanPreview,
   ReviewScopeInput,
   ReviewStartInput,
   ReviewTarget,
@@ -29,12 +30,22 @@ const result = {
   summary: 'Review completed.',
   comments: [],
 } satisfies ReviewResult;
+const plan = {
+  intensity: 'thorough',
+  reviewerCount: 3,
+  perspectives: [
+    'Correctness and regressions',
+    'Security and data safety',
+    'Maintainability and tests',
+  ],
+} satisfies ReviewPlanPreview;
 
 function makeSession() {
   const rpc = {
     listReviewBaseRefs: vi.fn(async () => [{ name: 'main', kind: 'branch' }]),
     listReviewCommits: vi.fn(async () => [{ sha: 'abc', title: 'change' }]),
     previewReviewTarget: vi.fn(async () => preview),
+    previewReviewPlan: vi.fn(async () => plan),
     startReview: vi.fn(async () => result),
     cancelReview: vi.fn(async () => {}),
     clearSessionHandlers: vi.fn(),
@@ -65,6 +76,7 @@ describe('Session review methods', () => {
     await session.listReviewBaseRefs();
     await session.listReviewCommits();
     await session.previewReviewTarget(target);
+    await session.previewReviewPlan(input);
     await session.startReview(input);
     await session.cancelReview();
 
@@ -73,6 +85,10 @@ describe('Session review methods', () => {
     expect(rpc.previewReviewTarget).toHaveBeenCalledWith({
       sessionId: 'ses_review',
       target,
+    });
+    expect(rpc.previewReviewPlan).toHaveBeenCalledWith({
+      sessionId: 'ses_review',
+      ...input,
     });
     expect(rpc.startReview).toHaveBeenCalledWith({
       sessionId: 'ses_review',
@@ -86,6 +102,7 @@ describe('Session review methods', () => {
       listReviewBaseRefs: vi.fn(async () => []),
       listReviewCommits: vi.fn(async () => []),
       previewReviewTarget: vi.fn(async () => preview),
+      previewReviewPlan: vi.fn(async () => plan),
       startReview: vi.fn(async () => result),
       cancelReview: vi.fn(async () => {}),
     };
@@ -94,6 +111,12 @@ describe('Session review methods', () => {
     await rpc.listReviewBaseRefs({ sessionId: 'ses_review' });
     await rpc.listReviewCommits({ sessionId: 'ses_review' });
     await rpc.previewReviewTarget({ sessionId: 'ses_review', target });
+    await rpc.previewReviewPlan({
+      sessionId: 'ses_review',
+      target,
+      intensity: 'thorough',
+      focus: 'correctness',
+    });
     await rpc.startReview({
       sessionId: 'ses_review',
       target,
@@ -107,6 +130,12 @@ describe('Session review methods', () => {
     expect(core.previewReviewTarget).toHaveBeenCalledWith({
       sessionId: 'ses_review',
       target,
+    });
+    expect(core.previewReviewPlan).toHaveBeenCalledWith({
+      sessionId: 'ses_review',
+      target,
+      intensity: 'thorough',
+      focus: 'correctness',
     });
     expect(core.startReview).toHaveBeenCalledWith({
       sessionId: 'ses_review',

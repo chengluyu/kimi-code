@@ -47,6 +47,7 @@ import type {
   ResumedSessionSummary,
   ReviewBaseRef,
   ReviewCommit,
+  ReviewPlanPreview,
   ReviewResult,
   ReviewStartInput,
   ReviewTarget,
@@ -104,6 +105,8 @@ export interface ReconnectMcpServerRpcInput extends SessionIdRpcInput {
 export interface PreviewReviewTargetRpcInput extends SessionIdRpcInput {
   readonly target: ReviewTarget;
 }
+
+export type PreviewReviewPlanRpcInput = SessionIdRpcInput & ReviewStartInput;
 
 export type StartReviewRpcInput = SessionIdRpcInput & ReviewStartInput;
 
@@ -450,6 +453,16 @@ export abstract class SDKRpcClientBase {
     return rpc.previewReviewTarget({
       sessionId: input.sessionId,
       target: input.target,
+    });
+  }
+
+  async previewReviewPlan(input: PreviewReviewPlanRpcInput): Promise<ReviewPlanPreview> {
+    const rpc = await this.getRpc();
+    return rpc.previewReviewPlan({
+      sessionId: input.sessionId,
+      target: input.target,
+      intensity: input.intensity,
+      focus: input.focus,
     });
   }
 

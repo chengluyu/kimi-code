@@ -1,5 +1,6 @@
 import type {
   ReviewIntensity,
+  ReviewPlanPreview,
   ReviewStartInput,
   ReviewTarget,
 } from '@moonshot-ai/kimi-code-sdk';
@@ -13,7 +14,6 @@ import {
   isReviewScopeChoice,
   REVIEW_INTENSITY_CHOICES,
   REVIEW_SCOPE_CHOICES,
-  THOROUGH_REVIEW_PERSPECTIVE_LABELS,
   reviewBaseRefChoice,
   reviewCommitChoice,
   type ReviewChoice,
@@ -53,18 +53,21 @@ export async function handleReviewCommand(host: SlashCommandHost, args: string):
     previewStatus.clear();
     return;
   }
-  previewStatus.clear();
-  if (intensity === 'thorough') {
-    host.showNotice(
-      'Thorough review',
-      `Focused reviewers: ${THOROUGH_REVIEW_PERSPECTIVE_LABELS.join('; ')}.`,
-    );
-  } else if (intensity === 'deep') {
-    host.showNotice(
-      'Deep review',
-      'Swarm-backed review will split files across overlapping focused reviewers.',
-    );
+  const plan = intensity === 'standard'
+    ? undefined
+    : await session.previewReviewPlan({
+      target: preview.target,
+      intensity,
+      focus,
+    });
+  if (plan !== undefined) {
+    const confirmed = await promptReviewPerspectiveConfirmation(host, plan);
+    if (!confirmed) {
+      previewStatus.clear();
+      return;
+    }
   }
+  previewStatus.clear();
 
   await startReview(host, {
     target: preview.target,
@@ -134,6 +137,29 @@ function promptReviewIntensity(host: SlashCommandHost): Promise<ReviewIntensity 
   });
 }
 
+function promptReviewPerspectiveConfirmation(
+  host: SlashCommandHost,
+  plan: ReviewPlanPreview,
+): Promise<boolean> {
+  return promptChoice(host, {
+    title: 'Review perspectives',
+    notice: plan.perspectives.join(' · '),
+    options: [
+      {
+        value: 'start',
+        label: 'Start review',
+        description: reviewPlanSummary(plan),
+      },
+      {
+        value: 'cancel',
+        label: 'Cancel',
+        description: 'Return to chat without starting review.',
+      },
+    ],
+    optionSpacing: 'relaxed',
+  }).then((value) => value === 'start');
+}
+
 async function startReview(
   host: SlashCommandHost,
   input: ReviewStartInput,
@@ -175,6 +201,7 @@ function promptChoice(
   host: SlashCommandHost,
   input: {
     readonly title: string;
+    readonly notice?: string;
     readonly options: readonly ReviewChoice[];
     readonly searchable?: boolean;
     readonly optionSpacing?: 'compact' | 'relaxed';
@@ -184,6 +211,7 @@ function promptChoice(
     host.mountEditorReplacement(
       new ChoicePickerComponent({
         title: input.title,
+        notice: input.notice,
         options: input.options.map(toChoiceOption),
         searchable: input.searchable,
         optionSpacing: input.optionSpacing,
@@ -198,6 +226,18 @@ function promptChoice(
       }),
     );
   });
+}
+
+function reviewPlanSummary(plan: ReviewPlanPreview): string {
+  const reviewers = `${String(plan.reviewerCount)} ${plan.reviewerCount === 1 ? 'reviewer agent' : 'reviewer agents'}`;
+  const parts = [reviewers, `Perspectives: ${plan.perspectives.join('; ')}`];
+  if (plan.fileGroups !== undefined && plan.fileGroups.length > 0) {
+    parts.push(`${String(plan.fileGroups.length)} file ${plan.fileGroups.length === 1 ? 'group' : 'groups'}`);
+  }
+  if (plan.reconciliationGroups !== undefined && plan.reconciliationGroups.length > 0) {
+    parts.push(`${String(plan.reconciliationGroups.length)} reconciliation ${plan.reconciliationGroups.length === 1 ? 'group' : 'groups'}`);
+  }
+  return parts.join(' · ');
 }
 
 function toChoiceOption(choice: ReviewChoice): ChoiceOption {
