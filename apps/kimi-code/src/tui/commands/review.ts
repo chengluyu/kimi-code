@@ -116,6 +116,7 @@ function promptReviewScope(host: SlashCommandHost): Promise<ReviewScopeChoice | 
   return promptChoice(host, {
     title: 'What to review',
     options: REVIEW_SCOPE_CHOICES,
+    optionSpacing: 'relaxed',
   }).then((value) => {
     if (value === undefined) return undefined;
     return isReviewScopeChoice(value) ? value : undefined;
@@ -126,6 +127,7 @@ function promptReviewIntensity(host: SlashCommandHost): Promise<ReviewIntensity 
   return promptChoice(host, {
     title: 'Review intensity',
     options: REVIEW_INTENSITY_CHOICES,
+    optionSpacing: 'relaxed',
   }).then((value) => {
     if (value === undefined) return undefined;
     return isReviewIntensity(value) ? value : undefined;
@@ -175,6 +177,7 @@ function promptChoice(
     readonly title: string;
     readonly options: readonly ReviewChoice[];
     readonly searchable?: boolean;
+    readonly optionSpacing?: 'compact' | 'relaxed';
   },
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -183,6 +186,7 @@ function promptChoice(
         title: input.title,
         options: input.options.map(toChoiceOption),
         searchable: input.searchable,
+        optionSpacing: input.optionSpacing,
         onSelect: (value) => {
           host.restoreEditor();
           resolve(value);

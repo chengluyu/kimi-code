@@ -71,6 +71,40 @@ describe('ChoicePickerComponent', () => {
     expect(out).toContain('    Automatically approve tool actions and plan transitions.');
   });
 
+  it('keeps compact option spacing by default', () => {
+    const picker = new ChoicePickerComponent({
+      title: 'Pick one',
+      options: [
+        { value: 'a', label: 'Alpha', description: 'First option.' },
+        { value: 'b', label: 'Beta', description: 'Second option.' },
+      ],
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const out = picker.render(120).map(strip);
+    const descriptionIndex = out.indexOf('    First option.');
+    expect(out[descriptionIndex + 1]).toBe('    Beta');
+  });
+
+  it('inserts a blank line between options in relaxed spacing', () => {
+    const picker = new ChoicePickerComponent({
+      title: 'Pick one',
+      optionSpacing: 'relaxed',
+      options: [
+        { value: 'a', label: 'Alpha', description: 'First option.' },
+        { value: 'b', label: 'Beta', description: 'Second option.' },
+      ],
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const out = picker.render(120).map(strip);
+    const descriptionIndex = out.indexOf('    First option.');
+    expect(out[descriptionIndex + 1]).toBe('');
+    expect(out[descriptionIndex + 2]).toBe('    Beta');
+  });
+
   it('renders domain selector wrappers with their configured options', () => {
     const onSelect = vi.fn();
     const onCancel = vi.fn();

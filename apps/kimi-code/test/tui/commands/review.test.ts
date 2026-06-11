@@ -14,6 +14,7 @@ import { currentTheme } from '#/tui/theme';
 const ENTER = '\r';
 const DOWN = '\u001B[B';
 const ESC = '\u001B';
+const ANSI_SGR = /\u001B\[[0-9;]*m/g;
 
 interface TestPicker {
   handleInput(data: string): void;
@@ -97,6 +98,10 @@ function mountedPicker(host: SlashCommandHost, index: number): TestPicker {
   return mock.mock.calls[index]?.[0] as TestPicker;
 }
 
+function strippedPickerLines(host: SlashCommandHost, index: number): string[] {
+  return mountedPicker(host, index).render(120).map((line) => line.replaceAll(ANSI_SGR, ''));
+}
+
 async function waitForPicker(host: SlashCommandHost, count: number): Promise<void> {
   await vi.waitFor(() => {
     expect(host.mountEditorReplacement).toHaveBeenCalledTimes(count);
@@ -162,6 +167,27 @@ describe('handleReviewCommand', () => {
     expect(spinnerStop).toHaveBeenCalledWith({ ok: false, label: 'Review stopped.' });
     expect(host.showError).not.toHaveBeenCalled();
     expect(host.appendTranscriptEntry).not.toHaveBeenCalled();
+  });
+
+  it('uses relaxed spacing for the primary review selectors', async () => {
+    const { host } = makeHost();
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    const scopeLines = strippedPickerLines(host, 0);
+    const workingTreeDescription = scopeLines.indexOf('    Review uncommitted tracked and untracked changes.');
+    expect(scopeLines[workingTreeDescription + 1]).toBe('');
+    expect(scopeLines[workingTreeDescription + 2]).toBe('    Current branch');
+
+    mountedPicker(host, 0).handleInput(ENTER);
+    await waitForPicker(host, 2);
+    const intensityLines = strippedPickerLines(host, 1);
+    const standardDescription = intensityLines.indexOf('    Single reviewer for everyday changes.');
+    expect(intensityLines[standardDescription + 1]).toBe('');
+    expect(intensityLines[standardDescription + 2]).toBe('    Thorough');
+
+    mountedPicker(host, 1).handleInput(ESC);
+    await task;
   });
 
   it('selects a base ref for current-branch review', async () => {

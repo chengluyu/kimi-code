@@ -43,6 +43,7 @@ export interface ChoicePickerOptions {
   readonly searchable?: boolean;
   /** Items per page. Lists longer than this paginate. */
   readonly pageSize?: number;
+  readonly optionSpacing?: 'compact' | 'relaxed';
   readonly onSelect: (value: string) => void;
   readonly onCancel: () => void;
 }
@@ -164,6 +165,9 @@ export class ChoicePickerComponent extends Container implements Focusable {
         for (const descLine of wrapDescription(opt.description, descriptionWidth)) {
           lines.push(currentTheme.fg('textMuted', `    ${descLine}`));
         }
+      }
+      if (this.opts.optionSpacing === 'relaxed' && i < view.page.end - 1) {
+        lines.push('');
       }
     }
 
