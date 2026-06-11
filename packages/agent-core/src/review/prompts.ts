@@ -60,7 +60,7 @@ export function buildDeepReviewerPrompt(input: {
   readonly assignment: ReviewAssignment;
 }): string {
   return buildReviewerPrompt(
-    `Review the assigned file group from this Deep review perspective: ${input.assignment.perspective ?? 'focused review'}.`,
+    `Review the assigned file group from this Deep Review perspective: ${input.assignment.perspective ?? 'focused review'}.`,
     input,
     fullFileCoverageWorkflow(),
   );

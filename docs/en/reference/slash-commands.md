@@ -96,13 +96,13 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 
 ## Code review
 
-`/review [<focus>]` starts a read-only review workflow for Git changes. It is available only when the `code_review` experimental feature is enabled. Turn it on from `/experiments`, set `[experimental].code_review = true` in `config.toml`, or start the CLI with `KIMI_CODE_EXPERIMENTAL_CODE_REVIEW=1`.
+`/review [<focus>]` starts a read-only code review workflow for selected local changes. It is available only when the `code_review` experimental feature is enabled. Turn it on from `/experiments`, set `[experimental].code_review = true` in `config.toml`, or start the CLI with `KIMI_CODE_EXPERIMENTAL_CODE_REVIEW=1`.
 
-The command first asks what to review: uncommitted working-tree changes, the current branch against a selected branch, tag, or commit, or one specific commit. It then previews the number of changed files and added or deleted lines before asking for review intensity:
+The command first asks what to review: uncommitted working-tree changes, the current branch against a selected branch, tag, or commit, all commits ahead of the upstream branch, or one specific commit. It then previews the number of changed files and added or deleted lines before asking for review intensity:
 
 - **Standard**: one reviewer for everyday changes.
 - **Thorough**: multiple focused reviewers, followed by one reconciliation step that combines or dismisses their candidate comments.
-- **Deep**: uses `AgentSwarm` to split files into overlapping focused reviewer groups and reconcile comments by perspective group.
+- **Deep Review**: uses `AgentSwarm` to split files into overlapping focused reviewer groups and reconcile comments by perspective group.
 
 Use the optional focus text for priorities such as `/review focus on security` or `/review check API compatibility`. During an active review, `Esc` asks for confirmation before cancelling instead of stopping the review immediately. Final comments keep links back to the source review comments that produced them.
 

@@ -55,7 +55,7 @@ export function createDeepCoverageMatrix(input: DeepCoverageMatrixInput): DeepCo
   const perspectives = normalizePerspectives(input.perspectives ?? DEEP_REVIEW_PERSPECTIVES);
   if (perspectives.length < MIN_REVIEWERS_PER_FILE) {
     throw new Error(
-      `Deep review requires at least ${String(MIN_REVIEWERS_PER_FILE)} perspectives for overlapping coverage.`,
+      `Deep Review requires at least ${String(MIN_REVIEWERS_PER_FILE)} perspectives for overlapping coverage.`,
     );
   }
 

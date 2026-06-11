@@ -101,7 +101,7 @@ type ReviewAgentSwarmEvent = NonNullable<
 >;
 
 const DEEP_REVIEW_AGENT_SWARM_TOOL_CALL_ID = 'review:deep-agent-swarm';
-const DEEP_REVIEW_AGENT_SWARM_DESCRIPTION = 'Deep review reviewers';
+const DEEP_REVIEW_AGENT_SWARM_DESCRIPTION = 'Deep Review reviewers';
 const DEEP_REVIEW_AGENT_SWARM_PROMPT_TEMPLATE = 'Run this review assignment:\n{{item}}';
 const DEFAULT_MAX_NON_PROGRESS_SWARM_CONTINUATIONS = 3;
 
@@ -381,7 +381,7 @@ export class ReviewOrchestrator {
             assignment,
             sourceCommentCount: sourceCommentIds.length,
           }),
-          description: `Reconcile Deep review: ${group.label}`,
+          description: `Reconcile Deep Review: ${group.label}`,
           signal,
         }),
       ),
@@ -461,11 +461,11 @@ export class ReviewOrchestrator {
         const state = pending.find((item) => item.assignment.id === result.task.data.assignmentId);
         if (state === undefined) continue;
         if (result.status !== 'completed') {
-          const message = result.error ?? `Deep review worker ${state.assignment.id} ${result.status}`;
+          const message = result.error ?? `Deep Review worker ${state.assignment.id} ${result.status}`;
           throw new Error(message);
         }
         if (result.agentId === undefined) {
-          throw new Error(`Deep review worker ${state.assignment.id} completed without an agent id.`);
+          throw new Error(`Deep Review worker ${state.assignment.id} completed without an agent id.`);
         }
         state.agentId = result.agentId;
 
@@ -506,7 +506,7 @@ export class ReviewOrchestrator {
       profileName: 'reviewer',
       parentToolCallId: DEEP_REVIEW_AGENT_SWARM_TOOL_CALL_ID,
       parentToolCallUuid: this.options.parentToolCallUuid,
-      description: `Deep review: ${state.spec.fileGroupName} / ${state.spec.perspective}`,
+      description: `Deep Review: ${state.spec.fileGroupName} / ${state.spec.perspective}`,
       swarmIndex: state.swarmIndex,
       swarmItem: state.swarmItem,
       runInBackground: false,
@@ -533,7 +533,7 @@ export class ReviewOrchestrator {
 
   private requireSwarmLauncher(): ReviewSwarmLauncher {
     if (hasRunQueued(this.options.launcher)) return this.options.launcher;
-    throw new Error('Deep review requires an AgentSwarm-capable subagent launcher.');
+    throw new Error('Deep Review requires an AgentSwarm-capable subagent launcher.');
   }
 
   private auditAssignment(assignment: ReviewAssignment): ReviewWorkerAudit {

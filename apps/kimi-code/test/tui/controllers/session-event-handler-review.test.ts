@@ -177,7 +177,7 @@ describe('SessionEventHandler review events', () => {
     expect(appendedEntries(host).at(-1)?.reviewData?.detail).toContain('[provider.rate_limit]');
   });
 
-  it('starts AgentSwarm progress for Deep review reviewer phase', () => {
+  it('starts AgentSwarm progress for Deep Review reviewer phase', () => {
     const host = makeHost();
     const handler = new SessionEventHandler(host);
 
@@ -187,7 +187,7 @@ describe('SessionEventHandler review events', () => {
       agentSwarm: {
         toolCallId: 'review:deep-agent-swarm',
         args: {
-          description: 'Deep review reviewers',
+          description: 'Deep Review reviewers',
           subagent_type: 'reviewer',
           prompt_template: 'Run this review assignment:\n{{item}}',
           items: ['Correctness / src/a.ts', 'Tests / src/a.ts'],
@@ -201,7 +201,7 @@ describe('SessionEventHandler review events', () => {
     expect(handler.hasActiveAgentSwarmToolCall()).toBe(true);
   });
 
-  it('suppresses Deep review reviewer assignment rows while AgentSwarm is active', () => {
+  it('suppresses Deep Review reviewer assignment rows while AgentSwarm is active', () => {
     const host = makeHost();
     const handler = new SessionEventHandler(host);
 
@@ -211,7 +211,7 @@ describe('SessionEventHandler review events', () => {
       agentSwarm: {
         toolCallId: 'review:deep-agent-swarm',
         args: {
-          description: 'Deep review reviewers',
+          description: 'Deep Review reviewers',
           subagent_type: 'reviewer',
           prompt_template: 'Run this review assignment:\n{{item}}',
           items: ['Correctness / src/a.ts', 'Tests / src/a.ts'],

@@ -252,6 +252,8 @@ describe('handleReviewCommand', () => {
     const standardDescription = intensityLines.indexOf('    Single reviewer for everyday changes.');
     expect(intensityLines[standardDescription + 1]).toBe('');
     expect(intensityLines[standardDescription + 2]).toBe('    Thorough');
+    expect(intensityLines).toContain('    Deep Review');
+    expect(intensityLines).toContain('    Uses AgentSwarm for risky or large changes.');
 
     mountedPicker(host, 1).handleInput(ESC);
     await task;
@@ -426,7 +428,7 @@ describe('handleReviewCommand', () => {
     expect(transientStatusClear).toHaveBeenCalledTimes(1);
   });
 
-  it('selects a single commit and starts a Deep review', async () => {
+  it('selects a single commit and starts a Deep Review', async () => {
     const { host, session } = makeHost({
       commits: [{ sha: 'abc123def456', title: 'change commit' }],
     });

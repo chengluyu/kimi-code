@@ -93,7 +93,7 @@ describe('createDeepCoverageMatrix', () => {
         files: files(['src/a.ts']),
         perspectives: ['Only'],
       }),
-    ).toThrow('Deep review requires at least 2 perspectives');
+    ).toThrow('Deep Review requires at least 2 perspectives');
   });
 });
 

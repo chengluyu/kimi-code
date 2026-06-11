@@ -76,8 +76,8 @@ export const REVIEW_INTENSITY_CHOICES: readonly ReviewChoice[] = [
   },
   {
     value: 'deep',
-    label: 'Deep',
-    description: 'Swarm-backed review for risky or large changes.',
+    label: 'Deep Review',
+    description: 'Uses AgentSwarm for risky or large changes.',
   },
 ];
 
