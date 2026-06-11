@@ -27,6 +27,7 @@ import type {
   ReviewCommit,
   ReviewPlanPreview,
   ReviewResult,
+  ReviewScopeSummary,
   ReviewStartInput,
   ReviewTarget,
   ReviewTargetPreview,
@@ -248,6 +249,11 @@ export class Session {
   async listReviewBaseRefs(): Promise<readonly ReviewBaseRef[]> {
     this.ensureOpen();
     return this.rpc.listReviewBaseRefs({ sessionId: this.id });
+  }
+
+  async getReviewScopeSummary(): Promise<ReviewScopeSummary> {
+    this.ensureOpen();
+    return this.rpc.getReviewScopeSummary({ sessionId: this.id });
   }
 
   async listReviewCommits(): Promise<readonly ReviewCommit[]> {

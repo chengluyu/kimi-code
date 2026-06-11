@@ -26,6 +26,7 @@ import type {
   ReviewCommit,
   ReviewPlanPreview,
   ReviewResult,
+  ReviewScopeSummary,
   ReviewStartInput,
   ReviewTarget,
   ReviewTargetPreview,
@@ -366,6 +367,7 @@ export interface SessionAPI extends AgentAPIWithId {
   getMcpStartupMetrics: (payload: EmptyPayload) => McpStartupMetrics;
   reconnectMcpServer: (payload: ReconnectMcpServerPayload) => void;
   generateAgentsMd: (payload: EmptyPayload) => void;
+  getReviewScopeSummary: (payload: EmptyPayload) => ReviewScopeSummary;
   listReviewBaseRefs: (payload: EmptyPayload) => readonly ReviewBaseRef[];
   listReviewCommits: (payload: EmptyPayload) => readonly ReviewCommit[];
   previewReviewTarget: (payload: PreviewReviewTargetPayload) => ReviewTargetPreview;

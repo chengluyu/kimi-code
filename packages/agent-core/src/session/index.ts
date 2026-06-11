@@ -41,6 +41,7 @@ import { SessionSubagentHost } from './subagent-host';
 import type { ToolServices } from '../tools/support/services';
 import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
 import {
+  getReviewScopeSummary,
   listReviewBaseRefs,
   listReviewCommits,
   previewReviewOrchestratorPlan,
@@ -51,6 +52,7 @@ import {
   type ReviewCommit,
   type ReviewPlanPreview,
   type ReviewResult,
+  type ReviewScopeSummary,
   type ReviewStartInput,
   type ReviewTarget,
   type ReviewTargetPreview,
@@ -396,6 +398,12 @@ export class Session {
     this.assertCodeReviewEnabled();
     const mainAgent = await this.ensureAgentResumed('main');
     return listReviewBaseRefs(mainAgent.kaos);
+  }
+
+  async getReviewScopeSummary(): Promise<ReviewScopeSummary> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    return getReviewScopeSummary(mainAgent.kaos);
   }
 
   async listReviewCommits(): Promise<readonly ReviewCommit[]> {

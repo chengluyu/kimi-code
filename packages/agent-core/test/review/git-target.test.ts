@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import {
+  getReviewScopeSummary,
   listReviewBaseRefs,
   listReviewCommits,
   previewReviewTarget,
@@ -142,6 +143,61 @@ describe('review git target resolver', () => {
         title: 'feature commit',
         author: 'Review Test',
       });
+    });
+  });
+
+  it('summarizes review scope context for the first selector', async () => {
+    await withGitRepo(async (repo) => {
+      await writeFile(join(repo, 'a.ts'), 'base\n');
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-m', 'base commit');
+      const mainCommit = await gitOutput(repo, 'rev-parse', 'HEAD');
+
+      await git(repo, 'switch', '-c', 'feature');
+      await git(repo, 'branch', '--set-upstream-to', 'main');
+      await writeFile(join(repo, 'feature.ts'), 'feature\n');
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-m', 'feature commit');
+      const featureCommit = await gitOutput(repo, 'rev-parse', 'HEAD');
+      const shortFeatureCommit = await gitOutput(repo, 'rev-parse', '--short', 'HEAD');
+
+      await writeFile(join(repo, 'staged.ts'), 'staged\n');
+      await git(repo, 'add', 'staged.ts');
+      await writeFile(join(repo, 'a.ts'), 'base\nunstaged\n');
+      await writeFile(join(repo, 'untracked.ts'), 'untracked\n');
+
+      const summary = await getReviewScopeSummary(testKaos.withCwd(repo));
+
+      expect(summary.workingTree).toEqual({
+        stagedCount: 1,
+        unstagedCount: 1,
+        untrackedCount: 1,
+        conflictedCount: 0,
+      });
+      expect(summary.head).toEqual({
+        sha: featureCommit,
+        shortSha: shortFeatureCommit,
+        subject: 'feature commit',
+      });
+      expect(summary.upstream).toEqual({
+        upstreamRef: 'main',
+        upstreamCommit: mainCommit,
+        headCommit: featureCommit,
+        aheadCount: 1,
+        behindCount: 0,
+      });
+    });
+  });
+
+  it('omits upstream summary when the branch has no upstream', async () => {
+    await withGitRepo(async (repo) => {
+      await writeFile(join(repo, 'a.ts'), 'base\n');
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-m', 'base commit');
+
+      const summary = await getReviewScopeSummary(testKaos.withCwd(repo));
+
+      expect(summary.upstream).toBeNull();
     });
   });
 });

@@ -8,6 +8,10 @@ import type {
   ReviewDiffStats,
   ReviewFileChange,
   ReviewFileStatus,
+  ReviewHeadSummary,
+  ReviewScopeSummary,
+  ReviewUpstreamInfo,
+  ReviewWorkingTreeSummary,
   ReviewTarget,
 } from './types';
 
@@ -83,6 +87,17 @@ export async function listReviewCommits(kaos: Kaos): Promise<readonly ReviewComm
     .filter((commit) => commit.sha.length > 0);
 }
 
+export async function getReviewScopeSummary(kaos: Kaos): Promise<ReviewScopeSummary> {
+  await ensureGitRepository(kaos);
+
+  const [workingTree, head, upstream] = await Promise.all([
+    getWorkingTreeSummary(kaos),
+    getHeadSummary(kaos),
+    getReviewUpstreamInfo(kaos),
+  ]);
+  return { workingTree, head, upstream };
+}
+
 export async function previewReviewTarget(
   kaos: Kaos,
   target: ReviewTarget,
@@ -130,6 +145,85 @@ async function listChangedFiles(kaos: Kaos, target: ReviewTarget): Promise<reado
   }
 }
 
+async function getWorkingTreeSummary(kaos: Kaos): Promise<ReviewWorkingTreeSummary> {
+  const raw = await runGitOrEmpty(kaos, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  let stagedCount = 0;
+  let unstagedCount = 0;
+  let untrackedCount = 0;
+  let conflictedCount = 0;
+  const tokens = raw.split('\0').filter(Boolean);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    const indexStatus = token[0] ?? ' ';
+    const worktreeStatus = token[1] ?? ' ';
+    if (indexStatus === '?' && worktreeStatus === '?') {
+      untrackedCount += 1;
+      continue;
+    }
+
+    if (isConflictedStatus(indexStatus, worktreeStatus)) {
+      conflictedCount += 1;
+      unstagedCount += 1;
+    } else {
+      if (isChangedStatus(indexStatus)) stagedCount += 1;
+      if (isChangedStatus(worktreeStatus)) unstagedCount += 1;
+    }
+
+    if (indexStatus === 'R' || indexStatus === 'C') {
+      i += 1;
+    }
+  }
+
+  return { stagedCount, unstagedCount, untrackedCount, conflictedCount };
+}
+
+async function getHeadSummary(kaos: Kaos): Promise<ReviewHeadSummary | null> {
+  const raw = await runGitOrNull(kaos, ['log', '-1', '--format=%H%x09%h%x09%s']);
+  const line = raw?.trimEnd();
+  if (!line) return null;
+  const [sha = '', shortSha = '', ...subjectParts] = line.split('\t');
+  if (sha.length === 0) return null;
+  return {
+    sha,
+    shortSha: shortSha || sha.slice(0, 7),
+    subject: subjectParts.join('\t'),
+  };
+}
+
+async function getReviewUpstreamInfo(kaos: Kaos): Promise<ReviewUpstreamInfo | null> {
+  const [upstreamRefRaw, upstreamCommitRaw, headCommitRaw, countsRaw] = await Promise.all([
+    runGitOrNull(kaos, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
+    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', '@{upstream}^{commit}']),
+    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']),
+    runGitOrNull(kaos, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD']),
+  ]);
+
+  const upstreamRef = upstreamRefRaw?.trim();
+  const upstreamCommit = upstreamCommitRaw?.trim();
+  const headCommit = headCommitRaw?.trim();
+  const counts = countsRaw?.trim().split(/\s+/) ?? [];
+  const behindCount = Number.parseInt(counts[0] ?? '', 10);
+  const aheadCount = Number.parseInt(counts[1] ?? '', 10);
+  if (
+    !upstreamRef
+    || !upstreamCommit
+    || !headCommit
+    || !Number.isFinite(aheadCount)
+    || !Number.isFinite(behindCount)
+  ) {
+    return null;
+  }
+
+  return {
+    upstreamRef,
+    upstreamCommit,
+    headCommit,
+    aheadCount,
+    behindCount,
+  };
+}
+
 async function diffFileChanges(kaos: Kaos, baseArgs: readonly string[]): Promise<readonly ReviewFileChange[]> {
   const nameStatusRaw = await runGit(kaos, withGitFormatArgs(baseArgs, ['--name-status', '-z']));
   const numstatRaw = await runGit(kaos, withGitFormatArgs(baseArgs, ['--numstat', '-z']));
@@ -146,6 +240,21 @@ async function diffFileChanges(kaos: Kaos, baseArgs: readonly string[]): Promise
       binary: stats?.binary || undefined,
     };
   });
+}
+
+function isChangedStatus(status: string): boolean {
+  return status !== ' ' && status !== '?' && status !== '!';
+}
+
+function isConflictedStatus(indexStatus: string, worktreeStatus: string): boolean {
+  const pair = `${indexStatus}${worktreeStatus}`;
+  return pair === 'DD'
+    || pair === 'AU'
+    || pair === 'UD'
+    || pair === 'UA'
+    || pair === 'DU'
+    || pair === 'AA'
+    || pair === 'UU';
 }
 
 function withGitFormatArgs(baseArgs: readonly string[], formatArgs: readonly string[]): readonly string[] {

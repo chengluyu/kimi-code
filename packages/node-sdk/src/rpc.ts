@@ -49,6 +49,7 @@ import type {
   ReviewCommit,
   ReviewPlanPreview,
   ReviewResult,
+  ReviewScopeSummary,
   ReviewStartInput,
   ReviewTarget,
   ReviewTargetPreview,
@@ -441,6 +442,11 @@ export abstract class SDKRpcClientBase {
   async listReviewBaseRefs(input: SessionIdRpcInput): Promise<readonly ReviewBaseRef[]> {
     const rpc = await this.getRpc();
     return rpc.listReviewBaseRefs({ sessionId: input.sessionId });
+  }
+
+  async getReviewScopeSummary(input: SessionIdRpcInput): Promise<ReviewScopeSummary> {
+    const rpc = await this.getRpc();
+    return rpc.getReviewScopeSummary({ sessionId: input.sessionId });
   }
 
   async listReviewCommits(input: SessionIdRpcInput): Promise<readonly ReviewCommit[]> {

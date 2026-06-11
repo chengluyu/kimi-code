@@ -4,6 +4,7 @@ import type {
   ReviewDiffStats,
   ReviewIntensity,
   ReviewResult,
+  ReviewScopeSummary,
 } from '@moonshot-ai/kimi-code-sdk';
 
 export type ReviewScopeChoice = 'working_tree' | 'current_branch' | 'ahead_of_upstream' | 'single_commit';
@@ -36,6 +37,31 @@ export const REVIEW_SCOPE_CHOICES: readonly ReviewChoice[] = [
     description: 'Review only the changes introduced by one commit.',
   },
 ];
+
+export function reviewScopeChoices(summary: ReviewScopeSummary | undefined): readonly ReviewChoice[] {
+  return [
+    {
+      value: 'working_tree',
+      label: 'Working tree',
+      description: summary === undefined
+        ? 'Review uncommitted tracked and untracked changes.'
+        : workingTreeDescription(summary),
+    },
+    {
+      value: 'current_branch',
+      label: 'Current branch',
+      description: summary?.head === null || summary?.head === undefined
+        ? 'Review the current HEAD against a selected branch, tag, or commit.'
+        : `HEAD ${summary.head.shortSha} · ${summary.head.subject}. Choose a base branch, tag, or commit.`,
+    },
+    ...upstreamScopeChoice(summary),
+    {
+      value: 'single_commit',
+      label: 'Single commit',
+      description: 'Review only the changes introduced by one commit.',
+    },
+  ];
+}
 
 export const REVIEW_INTENSITY_CHOICES: readonly ReviewChoice[] = [
   {
@@ -106,6 +132,32 @@ export function isReviewScopeChoice(value: string): value is ReviewScopeChoice {
     || value === 'current_branch'
     || value === 'ahead_of_upstream'
     || value === 'single_commit';
+}
+
+function upstreamScopeChoice(summary: ReviewScopeSummary | undefined): readonly ReviewChoice[] {
+  const upstream = summary?.upstream;
+  if (upstream === undefined || upstream === null || upstream.aheadCount === 0) return [];
+  return [
+    {
+      value: 'ahead_of_upstream',
+      label: 'Ahead of upstream',
+      description: `${upstream.upstreamRef} · ${formatCount(upstream.aheadCount, 'commit')} ahead`,
+    },
+  ];
+}
+
+function workingTreeDescription(summary: ReviewScopeSummary): string {
+  const { stagedCount, unstagedCount, untrackedCount, conflictedCount } = summary.workingTree;
+  const parts = [
+    `${String(stagedCount)} staged`,
+    `${String(unstagedCount)} unstaged`,
+    `${String(untrackedCount)} untracked`,
+  ];
+  if (conflictedCount > 0) parts.push(`${formatCount(conflictedCount, 'conflict')}`);
+  if (stagedCount === 0 && unstagedCount === 0 && untrackedCount === 0 && conflictedCount === 0) {
+    return 'No uncommitted changes detected.';
+  }
+  return parts.join(' · ');
 }
 
 function formatCount(count: number, singular: string): string {

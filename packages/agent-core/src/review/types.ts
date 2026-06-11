@@ -127,6 +127,33 @@ export interface ReviewTargetPreview {
   readonly stats: ReviewDiffStats;
 }
 
+export interface ReviewWorkingTreeSummary {
+  readonly stagedCount: number;
+  readonly unstagedCount: number;
+  readonly untrackedCount: number;
+  readonly conflictedCount: number;
+}
+
+export interface ReviewHeadSummary {
+  readonly sha: string;
+  readonly shortSha: string;
+  readonly subject: string;
+}
+
+export interface ReviewUpstreamInfo {
+  readonly upstreamRef: string;
+  readonly upstreamCommit: string;
+  readonly headCommit: string;
+  readonly aheadCount: number;
+  readonly behindCount: number;
+}
+
+export interface ReviewScopeSummary {
+  readonly workingTree: ReviewWorkingTreeSummary;
+  readonly head: ReviewHeadSummary | null;
+  readonly upstream: ReviewUpstreamInfo | null;
+}
+
 export interface ReviewPlanFileGroup {
   readonly label: string;
   readonly files: readonly string[];

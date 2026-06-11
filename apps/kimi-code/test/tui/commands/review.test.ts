@@ -4,6 +4,7 @@ import type {
   ReviewIntensity,
   ReviewPlanPreview,
   ReviewResult,
+  ReviewScopeSummary,
   ReviewTargetPreview,
 } from '@moonshot-ai/kimi-code-sdk';
 import { describe, expect, it, vi } from 'vitest';
@@ -102,12 +103,32 @@ function plan(intensity: ReviewIntensity): ReviewPlanPreview {
   };
 }
 
+const defaultScopeSummary = {
+  workingTree: {
+    stagedCount: 0,
+    unstagedCount: 0,
+    untrackedCount: 0,
+    conflictedCount: 0,
+  },
+  head: {
+    sha: '3980a555807687914079243f9476fef93cbfd081',
+    shortSha: '3980a55',
+    subject: 'feat: run deep review through AgentSwarm',
+  },
+  upstream: null,
+} satisfies ReviewScopeSummary;
+
 function makeHost(input: {
   readonly refs?: readonly ReviewBaseRef[];
   readonly commits?: readonly ReviewCommit[];
+  readonly scopeSummary?: ReviewScopeSummary | Error;
 } = {}) {
   const workingTreePreview = preview({ scope: 'working_tree' });
   const session = {
+    getReviewScopeSummary: vi.fn(async () => {
+      if (input.scopeSummary instanceof Error) throw input.scopeSummary;
+      return input.scopeSummary ?? defaultScopeSummary;
+    }),
     listReviewBaseRefs: vi.fn(async () => input.refs ?? [{ name: 'main', kind: 'branch' }]),
     listReviewCommits: vi.fn(async () => input.commits ?? [{ sha: 'abc123', title: 'change' }]),
     previewReviewTarget: vi.fn(async (target) => preview(target)),
@@ -221,7 +242,7 @@ describe('handleReviewCommand', () => {
 
     await waitForPicker(host, 1);
     const scopeLines = strippedPickerLines(host, 0);
-    const workingTreeDescription = scopeLines.indexOf('    Review uncommitted tracked and untracked changes.');
+    const workingTreeDescription = scopeLines.indexOf('    No uncommitted changes detected.');
     expect(scopeLines[workingTreeDescription + 1]).toBe('');
     expect(scopeLines[workingTreeDescription + 2]).toBe('    Current branch');
 
@@ -234,6 +255,56 @@ describe('handleReviewCommand', () => {
 
     mountedPicker(host, 1).handleInput(ESC);
     await task;
+  });
+
+  it('shows review scope metadata in the first selector', async () => {
+    const { host } = makeHost({
+      scopeSummary: {
+        workingTree: {
+          stagedCount: 1,
+          unstagedCount: 2,
+          untrackedCount: 3,
+          conflictedCount: 0,
+        },
+        head: {
+          sha: '3980a555807687914079243f9476fef93cbfd081',
+          shortSha: '3980a55',
+          subject: 'feat: run deep review through AgentSwarm',
+        },
+        upstream: {
+          upstreamRef: 'origin/main',
+          upstreamCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          headCommit: '3980a555807687914079243f9476fef93cbfd081',
+          aheadCount: 5,
+          behindCount: 0,
+        },
+      },
+    });
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    const lines = strippedPickerLines(host, 0).join('\n');
+    mountedPicker(host, 0).handleInput(ESC);
+    await task;
+
+    expect(lines).toContain('1 staged · 2 unstaged · 3 untracked');
+    expect(lines).toContain('HEAD 3980a55 · feat: run deep review through AgentSwarm');
+    expect(lines).toContain('Ahead of upstream');
+    expect(lines).toContain('origin/main · 5 commits ahead');
+  });
+
+  it('falls back to static scope descriptions when scope metadata fails', async () => {
+    const { host } = makeHost({ scopeSummary: new Error('git failed') });
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    const lines = strippedPickerLines(host, 0).join('\n');
+    mountedPicker(host, 0).handleInput(ESC);
+    await task;
+
+    expect(lines).toContain('Review uncommitted tracked and untracked changes.');
+    expect(lines).toContain('Review the current HEAD against a selected branch, tag, or commit.');
+    expect(lines).not.toContain('Ahead of upstream');
   });
 
   it('selects a base ref for current-branch review', async () => {
@@ -265,7 +336,18 @@ describe('handleReviewCommand', () => {
   });
 
   it('selects the upstream-ahead review target without a base selector', async () => {
-    const { host, session } = makeHost();
+    const { host, session } = makeHost({
+      scopeSummary: {
+        ...defaultScopeSummary,
+        upstream: {
+          upstreamRef: 'origin/main',
+          upstreamCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          headCommit: '3980a555807687914079243f9476fef93cbfd081',
+          aheadCount: 2,
+          behindCount: 0,
+        },
+      },
+    });
     const task = handleReviewCommand(host, '');
 
     await waitForPicker(host, 1);
@@ -287,11 +369,11 @@ describe('handleReviewCommand', () => {
     expect(session.listReviewCommits).not.toHaveBeenCalled();
     expect(session.previewReviewTarget).toHaveBeenCalledWith({
       scope: 'current_branch',
-      baseRef: '@{upstream}',
+      baseRef: 'origin/main',
     });
     expect(session.startReview).toHaveBeenCalledWith(
       expect.objectContaining({
-        target: expect.objectContaining({ scope: 'current_branch', baseRef: '@{upstream}' }),
+        target: expect.objectContaining({ scope: 'current_branch', baseRef: 'origin/main' }),
         intensity: 'standard',
       }),
     );
@@ -351,7 +433,6 @@ describe('handleReviewCommand', () => {
     const task = handleReviewCommand(host, '');
 
     await waitForPicker(host, 1);
-    mountedPicker(host, 0).handleInput(DOWN);
     mountedPicker(host, 0).handleInput(DOWN);
     mountedPicker(host, 0).handleInput(DOWN);
     mountedPicker(host, 0).handleInput(ENTER);

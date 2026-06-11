@@ -1,6 +1,7 @@
 import type {
   ReviewIntensity,
   ReviewPlanPreview,
+  ReviewScopeSummary,
   ReviewStartInput,
   ReviewTarget,
 } from '@moonshot-ai/kimi-code-sdk';
@@ -13,7 +14,7 @@ import {
   isReviewIntensity,
   isReviewScopeChoice,
   REVIEW_INTENSITY_CHOICES,
-  REVIEW_SCOPE_CHOICES,
+  reviewScopeChoices,
   reviewBaseRefChoice,
   reviewCommitChoice,
   type ReviewChoice,
@@ -78,10 +79,10 @@ export async function handleReviewCommand(host: SlashCommandHost, args: string):
 
 async function resolveReviewTargetFromScope(
   host: SlashCommandHost,
-  scope: ReviewScopeChoice,
+  scope: ReviewScopeSelection,
 ): Promise<ReviewTarget | undefined> {
   const session = host.requireSession();
-  switch (scope) {
+  switch (scope.value) {
     case 'working_tree':
       return { scope: 'working_tree' };
 
@@ -100,7 +101,7 @@ async function resolveReviewTargetFromScope(
     }
 
     case 'ahead_of_upstream':
-      return { scope: 'current_branch', baseRef: '@{upstream}' };
+      return { scope: 'current_branch', baseRef: scope.upstreamRef ?? '@{upstream}' };
 
     case 'single_commit': {
       const commits = await session.listReviewCommits();
@@ -118,15 +119,33 @@ async function resolveReviewTargetFromScope(
   }
 }
 
-function promptReviewScope(host: SlashCommandHost): Promise<ReviewScopeChoice | undefined> {
+interface ReviewScopeSelection {
+  readonly value: ReviewScopeChoice;
+  readonly upstreamRef?: string;
+}
+
+async function promptReviewScope(host: SlashCommandHost): Promise<ReviewScopeSelection | undefined> {
+  const summary = await loadReviewScopeSummary(host);
   return promptChoice(host, {
     title: 'What to review',
-    options: REVIEW_SCOPE_CHOICES,
+    options: reviewScopeChoices(summary),
     optionSpacing: 'relaxed',
   }).then((value) => {
     if (value === undefined) return undefined;
-    return isReviewScopeChoice(value) ? value : undefined;
+    if (!isReviewScopeChoice(value)) return undefined;
+    return {
+      value,
+      upstreamRef: value === 'ahead_of_upstream' ? summary?.upstream?.upstreamRef : undefined,
+    };
   });
+}
+
+async function loadReviewScopeSummary(host: SlashCommandHost): Promise<ReviewScopeSummary | undefined> {
+  try {
+    return await host.requireSession().getReviewScopeSummary();
+  } catch {
+    return undefined;
+  }
 }
 
 function promptReviewIntensity(host: SlashCommandHost): Promise<ReviewIntensity | undefined> {

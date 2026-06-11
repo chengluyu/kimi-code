@@ -93,6 +93,10 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return this.session.generateAgentsMd();
   }
 
+  getReviewScopeSummary(_payload: EmptyPayload) {
+    return this.session.getReviewScopeSummary();
+  }
+
   listReviewBaseRefs(_payload: EmptyPayload) {
     return this.session.listReviewBaseRefs();
   }

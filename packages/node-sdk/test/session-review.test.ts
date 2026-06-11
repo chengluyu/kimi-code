@@ -7,6 +7,7 @@ import { Session } from '#/session';
 import type {
   ReviewResult,
   ReviewPlanPreview,
+  ReviewScopeSummary,
   ReviewScopeInput,
   ReviewStartInput,
   ReviewTarget,
@@ -39,9 +40,30 @@ const plan = {
     'Maintainability and tests',
   ],
 } satisfies ReviewPlanPreview;
+const scopeSummary = {
+  workingTree: {
+    stagedCount: 1,
+    unstagedCount: 2,
+    untrackedCount: 3,
+    conflictedCount: 0,
+  },
+  head: {
+    sha: '1234567890abcdef1234567890abcdef12345678',
+    shortSha: '1234567',
+    subject: 'feature commit',
+  },
+  upstream: {
+    upstreamRef: 'origin/main',
+    upstreamCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    headCommit: '1234567890abcdef1234567890abcdef12345678',
+    aheadCount: 2,
+    behindCount: 0,
+  },
+} satisfies ReviewScopeSummary;
 
 function makeSession() {
   const rpc = {
+    getReviewScopeSummary: vi.fn(async () => scopeSummary),
     listReviewBaseRefs: vi.fn(async () => [{ name: 'main', kind: 'branch' }]),
     listReviewCommits: vi.fn(async () => [{ sha: 'abc', title: 'change' }]),
     previewReviewTarget: vi.fn(async () => preview),
@@ -73,6 +95,7 @@ describe('Session review methods', () => {
       focus: 'security',
     } satisfies ReviewStartInput;
 
+    await session.getReviewScopeSummary();
     await session.listReviewBaseRefs();
     await session.listReviewCommits();
     await session.previewReviewTarget(target);
@@ -80,6 +103,7 @@ describe('Session review methods', () => {
     await session.startReview(input);
     await session.cancelReview();
 
+    expect(rpc.getReviewScopeSummary).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(rpc.listReviewBaseRefs).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(rpc.listReviewCommits).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(rpc.previewReviewTarget).toHaveBeenCalledWith({
@@ -99,6 +123,7 @@ describe('Session review methods', () => {
 
   it('forwards SDK RPC calls to core review RPC methods', async () => {
     const core = {
+      getReviewScopeSummary: vi.fn(async () => scopeSummary),
       listReviewBaseRefs: vi.fn(async () => []),
       listReviewCommits: vi.fn(async () => []),
       previewReviewTarget: vi.fn(async () => preview),
@@ -108,6 +133,7 @@ describe('Session review methods', () => {
     };
     const rpc = new ReviewRpcClient(core);
 
+    await rpc.getReviewScopeSummary({ sessionId: 'ses_review' });
     await rpc.listReviewBaseRefs({ sessionId: 'ses_review' });
     await rpc.listReviewCommits({ sessionId: 'ses_review' });
     await rpc.previewReviewTarget({ sessionId: 'ses_review', target });
@@ -125,6 +151,7 @@ describe('Session review methods', () => {
     });
     await rpc.cancelReview({ sessionId: 'ses_review' });
 
+    expect(core.getReviewScopeSummary).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(core.listReviewBaseRefs).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(core.listReviewCommits).toHaveBeenCalledWith({ sessionId: 'ses_review' });
     expect(core.previewReviewTarget).toHaveBeenCalledWith({

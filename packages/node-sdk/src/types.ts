@@ -74,6 +74,7 @@ export type {
   ReviewProgress,
   ReviewProgressStatus,
   ReviewResult,
+  ReviewScopeSummary,
   ReviewScopeKind,
   ReviewStartInput,
   ReviewTarget,
