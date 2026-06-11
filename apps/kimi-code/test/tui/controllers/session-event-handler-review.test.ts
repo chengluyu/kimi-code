@@ -200,4 +200,50 @@ describe('SessionEventHandler review events', () => {
     );
     expect(handler.hasActiveAgentSwarmToolCall()).toBe(true);
   });
+
+  it('suppresses Deep review reviewer assignment rows while AgentSwarm is active', () => {
+    const host = makeHost();
+    const handler = new SessionEventHandler(host);
+
+    handler.handleEvent({
+      ...reviewStartedEvent(),
+      intensity: 'deep',
+      agentSwarm: {
+        toolCallId: 'review:deep-agent-swarm',
+        args: {
+          description: 'Deep review reviewers',
+          subagent_type: 'reviewer',
+          prompt_template: 'Run this review assignment:\n{{item}}',
+          items: ['Correctness / src/a.ts', 'Tests / src/a.ts'],
+        },
+      },
+    } as any, vi.fn());
+    handler.handleEvent({
+      type: 'review.assignment.started',
+      sessionId: 's1',
+      agentId: 'main',
+      assignment: {
+        id: 'review-assignment-1',
+        role: 'reviewer',
+        perspective: 'Correctness and regressions',
+        assignedFiles: ['src/a.ts'],
+        requiredCoverage: 'full_file',
+        group: 'group-1',
+      },
+    } as any, vi.fn());
+    handler.handleEvent({
+      type: 'review.assignment.progress',
+      sessionId: 's1',
+      agentId: 'main',
+      progress: {
+        assignmentId: 'review-assignment-1',
+        status: 'complete',
+        summary: 'Done.',
+      },
+    } as any, vi.fn());
+
+    expect(appendedEntries(host).map((entry) => entry.reviewData?.title)).toEqual([
+      'Review started',
+    ]);
+  });
 });
