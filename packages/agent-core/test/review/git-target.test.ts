@@ -200,6 +200,26 @@ describe('review git target resolver', () => {
       expect(summary.upstream).toBeNull();
     });
   });
+
+  it('keeps HEAD metadata and omits upstream in detached HEAD state', async () => {
+    await withGitRepo(async (repo) => {
+      await writeFile(join(repo, 'a.ts'), 'base\n');
+      await git(repo, 'add', '.');
+      await git(repo, 'commit', '-m', 'base commit');
+      const sha = await gitOutput(repo, 'rev-parse', 'HEAD');
+      const shortSha = await gitOutput(repo, 'rev-parse', '--short', 'HEAD');
+      await git(repo, 'switch', '--detach', 'HEAD');
+
+      const summary = await getReviewScopeSummary(testKaos.withCwd(repo));
+
+      expect(summary.head).toEqual({
+        sha,
+        shortSha,
+        subject: 'base commit',
+      });
+      expect(summary.upstream).toBeNull();
+    });
+  });
 });
 
 async function withGitRepo(run: (repo: string) => Promise<void>): Promise<void> {

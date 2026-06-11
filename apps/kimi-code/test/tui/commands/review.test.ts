@@ -336,6 +336,30 @@ describe('handleReviewCommand', () => {
     expect(lines).not.toContain('Ahead of upstream');
   });
 
+  it('omits the upstream shortcut when the branch has no ahead commits', async () => {
+    const { host } = makeHost({
+      scopeSummary: {
+        ...defaultScopeSummary,
+        upstream: {
+          upstreamRef: 'origin/main',
+          upstreamCommit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          headCommit: '3980a555807687914079243f9476fef93cbfd081',
+          aheadCount: 0,
+          behindCount: 0,
+        },
+      },
+    });
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    const lines = strippedPickerLines(host, 0).join('\n');
+    mountedPicker(host, 0).handleInput(ESC);
+    await task;
+
+    expect(lines).not.toContain('Ahead of upstream');
+    expect(lines).not.toContain('0 commits ahead');
+  });
+
   it('selects a base ref for current-branch review', async () => {
     const { host, session } = makeHost({
       refs: [{ name: 'main', kind: 'branch', description: 'base branch' }],
