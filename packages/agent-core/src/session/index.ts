@@ -40,6 +40,7 @@ import { noopTelemetryClient, type TelemetryClient } from '../telemetry';
 import { SessionSubagentHost } from './subagent-host';
 import type { ToolServices } from '../tools/support/services';
 import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
+import { SessionReviewRuntime } from '../review';
 
 export interface SessionOptions {
   readonly kaos: Kaos;
@@ -118,6 +119,7 @@ export class Session {
   private readonly logHandle: SessionLogHandle | undefined;
   readonly hookEngine: HookEngine;
   readonly experimentalFlags: ExperimentalFlagResolver;
+  readonly review = new SessionReviewRuntime();
   private toolKaos: Kaos;
   private persistenceKaos: Kaos;
   private agentIdCounter = 0;
@@ -485,6 +487,7 @@ export class Session {
       type,
       kaos: this.toolKaos.withCwd(cwd),
       toolServices: this.options.toolServices,
+      review: config.review,
       config: this.options.config,
       homedir,
       skills: this.skills,

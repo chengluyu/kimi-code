@@ -103,27 +103,27 @@ Purpose: create central session-owned review state that workers and reconciliato
 
 **Tasks:**
 
-- [ ] Add a `SessionReviewRuntime` that stores active review runs, assignments, progress, comments, merged comments, dismissed comments, and coverage.
-- [ ] Add a per-agent review facade, passed from `Session.instantiateAgent`, so an agent can call review tools without storing a session or agent id directly on `Agent`.
-- [ ] Preserve the existing rule that `Agent` remains usable standalone. If no review facade is supplied, review tools should not be active and review injections should no-op.
-- [ ] Implement coverage tracking for:
+- [x] Add a `SessionReviewRuntime` that stores active review runs, assignments, progress, comments, merged comments, dismissed comments, and coverage.
+- [x] Add a per-agent review facade, passed from `Session.instantiateAgent`, so an agent can call review tools without storing a session or agent id directly on `Agent`.
+- [x] Preserve the existing rule that `Agent` remains usable standalone. If no review facade is supplied, review tools should not be active and review injections should no-op.
+- [x] Implement coverage tracking for:
   - patch hunks read through `ReadPatch`
   - file line ranges read through `ReadFileVersion`
   - full-file coverage completion for multi-call large file reads
-- [ ] Implement comment state:
+- [x] Implement comment state:
   - `AddComment` creates candidate comments and returns a comment id
   - `MergeComments` creates merged comments and stores source comment ids
   - `DismissComment` stores dismissal reason and optional merged comment id
-- [ ] Enforce invariants in runtime methods:
+- [x] Enforce invariants in runtime methods:
   - `AddComment` requires the cited path and line to be covered
   - `MergeComments` requires at least one source comment
   - `MergeComments` requires cited path and line support from source coverage
   - `UpdateProgress({ status: 'complete' })` fails while required coverage is missing
-- [ ] Add unit tests for coverage and comment invariants.
+- [x] Add unit tests for coverage and comment invariants.
 
 **Verification:**
 
-- [ ] Run `pnpm --filter @moonshot-ai/agent-core exec vitest run packages/agent-core/test/review/runtime.test.ts`.
+- [x] Run `pnpm --filter @moonshot-ai/agent-core exec vitest run packages/agent-core/test/review/runtime.test.ts`. Executed as `pnpm --filter @moonshot-ai/agent-core exec vitest run test/review/runtime.test.ts` because Vitest runs from the package directory.
 
 ## Phase 3: Review Tools
 
