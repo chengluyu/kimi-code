@@ -85,7 +85,7 @@ export async function readFileVersionForTarget(
   run: ReviewRuntimeRun,
   input: ReadFileVersionInput,
 ): Promise<ReadFileVersionResult> {
-  const source = resolveFileSource(run, input);
+  const source = await resolveFileSource(kaos, run, input);
   const text = source.kind === 'worktree'
     ? await kaos.readText(joinGitPath(kaos, kaos.getcwd(), input.path), { errors: 'replace' })
     : await runGit(kaos, ['show', `${source.ref}:${input.path}`]);
@@ -148,10 +148,14 @@ function patchArgs(run: ReviewRuntimeRun, path: string, unified: string): readon
   }
 }
 
-function resolveFileSource(
+async function resolveFileSource(
+  kaos: Kaos,
   run: ReviewRuntimeRun,
   input: ReadFileVersionInput,
-): { readonly kind: 'worktree'; readonly version: string } | { readonly kind: 'git'; readonly version: string; readonly ref: string } {
+): Promise<
+  | { readonly kind: 'worktree'; readonly version: string }
+  | { readonly kind: 'git'; readonly version: string; readonly ref: string }
+> {
   if (input.ref !== undefined) return { kind: 'git', version: 'ref', ref: input.ref };
 
   switch (run.target.scope) {
@@ -162,7 +166,12 @@ function resolveFileSource(
       return { kind: 'worktree', version: 'current' };
     case 'current_branch':
       if (input.version === 'base') {
-        return { kind: 'git', version: 'base', ref: run.target.baseRef };
+        const mergeBase = await runGit(kaos, [
+          'merge-base',
+          run.target.baseRef,
+          run.target.headRef ?? 'HEAD',
+        ]);
+        return { kind: 'git', version: 'base', ref: mergeBase.trim() };
       }
       return { kind: 'git', version: input.version ?? 'head', ref: run.target.headRef ?? 'HEAD' };
     case 'single_commit':

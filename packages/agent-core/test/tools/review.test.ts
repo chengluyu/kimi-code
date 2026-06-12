@@ -309,6 +309,47 @@ describe('review tools', () => {
     expect(json(progress)).toMatchObject({ status: 'complete' });
   });
 
+  it('reads current-branch base file versions from the merge base', async () => {
+    const runtime = createRuntime();
+    runtime.startReview(
+      {
+        target: {
+          scope: 'current_branch',
+          baseRef: 'base-tip',
+          headRef: 'head-tip',
+        },
+        intensity: 'standard',
+      },
+      statsFor([{ path: 'src/a.ts', status: 'modified', additions: 1, deletions: 0 }]),
+    );
+    const review = runtime.createAgentFacade(
+      runtime.createAssignment({
+        role: 'reviewer',
+        assignedFiles: ['src/a.ts'],
+        requiredCoverage: 'patch',
+      }).id,
+    );
+    const exec = vi.fn(async (...args: string[]) => {
+      const gitArgs = args.slice(3);
+      if (gitArgs[0] === 'merge-base') return processWithOutput('merge-base-sha\n');
+      if (gitArgs[0] === 'show') return processWithOutput('base at merge\n');
+      throw new Error(`unexpected git command: ${gitArgs.join(' ')}`);
+    });
+    const kaos = createFakeKaos({
+      getcwd: () => '/workspace',
+      exec,
+    });
+
+    const readResult = await executeTool(new ReadFileVersionTool(kaos, review), context({
+      path: 'src/a.ts',
+      version: 'base',
+    }));
+
+    expect(readResult.isError).toBeFalsy();
+    expect(exec).toHaveBeenCalledWith('git', '-C', '/workspace', 'merge-base', 'base-tip', 'head-tip');
+    expect(exec).toHaveBeenCalledWith('git', '-C', '/workspace', 'show', 'merge-base-sha:src/a.ts');
+  });
+
   it('merges comments with provenance and dismisses duplicates', async () => {
     const runtime = createRuntime();
     runtime.startReview(
