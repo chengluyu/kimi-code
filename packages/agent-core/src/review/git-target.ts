@@ -118,7 +118,15 @@ async function listChangedFiles(kaos: Kaos, target: ReviewTarget): Promise<reado
   switch (target.scope) {
     case 'working_tree':
       return [
-        ...(await diffFileChanges(kaos, ['diff', '--no-ext-diff', '--no-color', '-M', 'HEAD', '--'])),
+        ...(await diffFileChanges(kaos, [
+          'diff',
+          '--no-ext-diff',
+          '--no-color',
+          '-M',
+          '--end-of-options',
+          'HEAD',
+          '--',
+        ])),
         ...(await listUntrackedFileChanges(kaos)),
       ];
 
@@ -128,6 +136,7 @@ async function listChangedFiles(kaos: Kaos, target: ReviewTarget): Promise<reado
         '--no-ext-diff',
         '--no-color',
         '-M',
+        '--end-of-options',
         `${target.baseRef}...${target.headRef ?? 'HEAD'}`,
         '--',
       ]);
@@ -141,6 +150,7 @@ async function listChangedFiles(kaos: Kaos, target: ReviewTarget): Promise<reado
         '--no-ext-diff',
         '--no-color',
         '-M',
+        '--end-of-options',
         target.commit,
       ]);
   }
@@ -195,9 +205,9 @@ async function getHeadSummary(kaos: Kaos): Promise<ReviewHeadSummary | null> {
 async function getReviewUpstreamInfo(kaos: Kaos): Promise<ReviewUpstreamInfo | null> {
   const [upstreamRefRaw, upstreamCommitRaw, headCommitRaw, countsRaw] = await Promise.all([
     runGitOrNull(kaos, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
-    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', '@{upstream}^{commit}']),
-    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']),
-    runGitOrNull(kaos, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD']),
+    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', '--end-of-options', '@{upstream}^{commit}']),
+    runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', '--end-of-options', 'HEAD^{commit}']),
+    runGitOrNull(kaos, ['rev-list', '--left-right', '--count', '--end-of-options', '@{upstream}...HEAD']),
   ]);
 
   const upstreamRef = upstreamRefRaw?.trim();
@@ -259,6 +269,14 @@ function isConflictedStatus(indexStatus: string, worktreeStatus: string): boolea
 }
 
 function withGitFormatArgs(baseArgs: readonly string[], formatArgs: readonly string[]): readonly string[] {
+  const endOfOptionsIndex = baseArgs.indexOf('--end-of-options');
+  if (endOfOptionsIndex !== -1) {
+    return [
+      ...baseArgs.slice(0, endOfOptionsIndex),
+      ...formatArgs,
+      ...baseArgs.slice(endOfOptionsIndex),
+    ];
+  }
   const separatorIndex = baseArgs.lastIndexOf('--');
   if (separatorIndex === -1) return [...baseArgs, ...formatArgs];
   return [
@@ -297,7 +315,13 @@ async function ensureGitRepository(kaos: Kaos): Promise<void> {
 }
 
 async function resolveCommitRef(kaos: Kaos, ref: string): Promise<string> {
-  const resolved = await runGitOrNull(kaos, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  const resolved = await runGitOrNull(kaos, [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    '--end-of-options',
+    `${ref}^{commit}`,
+  ]);
   const sha = resolved?.trim();
   if (!sha) throw new ReviewGitTargetError('Could not resolve Git commit ref', ref);
   return sha;

@@ -89,6 +89,47 @@ describe('review git target resolver', () => {
     });
   });
 
+  it('separates selected refs from git options when resolving targets', async () => {
+    const exec = vi.fn(async (...args: string[]) => {
+      const gitArgs = args.slice(3);
+      if (gitArgs.join(' ') === 'rev-parse --is-inside-work-tree') {
+        return processWithOutput('true\n');
+      }
+      if (
+        gitArgs[0] === 'rev-parse' &&
+        gitArgs[1] === '--verify' &&
+        gitArgs[2] === '--quiet' &&
+        gitArgs[3] === '--end-of-options'
+      ) {
+        return processWithOutput('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n');
+      }
+      throw new Error(`unexpected git command: ${gitArgs.join(' ')}`);
+    });
+
+    const target = await resolveReviewTarget(createFakeKaos({
+      getcwd: () => '/workspace',
+      exec,
+    }), {
+      scope: 'single_commit',
+      commit: '--upload-pack=malicious',
+    });
+
+    expect(target).toEqual({
+      scope: 'single_commit',
+      commit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    });
+    expect(exec).toHaveBeenCalledWith(
+      'git',
+      '-C',
+      '/workspace',
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      '--end-of-options',
+      '--upload-pack=malicious^{commit}',
+    );
+  });
+
   it('previews only the selected single commit', async () => {
     await withGitRepo(async (repo) => {
       await writeFile(join(repo, 'a.ts'), 'a1\n');

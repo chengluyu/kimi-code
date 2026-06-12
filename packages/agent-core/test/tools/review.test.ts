@@ -346,8 +346,54 @@ describe('review tools', () => {
     }));
 
     expect(readResult.isError).toBeFalsy();
-    expect(exec).toHaveBeenCalledWith('git', '-C', '/workspace', 'merge-base', 'base-tip', 'head-tip');
-    expect(exec).toHaveBeenCalledWith('git', '-C', '/workspace', 'show', 'merge-base-sha:src/a.ts');
+    expect(exec).toHaveBeenCalledWith(
+      'git',
+      '-C',
+      '/workspace',
+      'merge-base',
+      '--end-of-options',
+      'base-tip',
+      'head-tip',
+    );
+    expect(exec).toHaveBeenCalledWith(
+      'git',
+      '-C',
+      '/workspace',
+      'show',
+      '--end-of-options',
+      'merge-base-sha:src/a.ts',
+    );
+  });
+
+  it('separates explicit file-version refs from git options', async () => {
+    const review = createReviewer({
+      assignedFiles: ['src/full.ts'],
+      requiredCoverage: 'patch',
+    });
+    const exec = vi.fn(async (...args: string[]) => {
+      const gitArgs = args.slice(3);
+      if (gitArgs[0] === 'show') return processWithOutput('safe ref content\n');
+      throw new Error(`unexpected git command: ${gitArgs.join(' ')}`);
+    });
+    const kaos = createFakeKaos({
+      getcwd: () => '/workspace',
+      exec,
+    });
+
+    const readResult = await executeTool(new ReadFileVersionTool(kaos, review), context({
+      path: 'src/full.ts',
+      ref: '--upload-pack=malicious',
+    }));
+
+    expect(readResult.isError).toBeFalsy();
+    expect(exec).toHaveBeenCalledWith(
+      'git',
+      '-C',
+      '/workspace',
+      'show',
+      '--end-of-options',
+      '--upload-pack=malicious:src/full.ts',
+    );
   });
 
   it('merges comments with provenance and dismisses duplicates', async () => {

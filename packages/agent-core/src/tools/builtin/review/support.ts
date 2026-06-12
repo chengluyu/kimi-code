@@ -88,7 +88,7 @@ export async function readFileVersionForTarget(
   const source = await resolveFileSource(kaos, run, input);
   const text = source.kind === 'worktree'
     ? await kaos.readText(joinGitPath(kaos, kaos.getcwd(), input.path), { errors: 'replace' })
-    : await runGit(kaos, ['show', `${source.ref}:${input.path}`]);
+    : await runGit(kaos, ['show', '--end-of-options', `${source.ref}:${input.path}`]);
   const lines = splitLogicalLines(text);
   const totalLines = lines.length;
   const lineOffset = input.lineOffset ?? 1;
@@ -132,19 +132,30 @@ export function isChangedFileVersionRead(
 function patchArgs(run: ReviewRuntimeRun, path: string, unified: string): readonly string[] {
   switch (run.target.scope) {
     case 'working_tree':
-      return ['diff', '--no-ext-diff', '--no-color', unified, 'HEAD', '--', path];
+      return ['diff', '--no-ext-diff', '--no-color', unified, '--end-of-options', 'HEAD', '--', path];
     case 'current_branch':
       return [
         'diff',
         '--no-ext-diff',
         '--no-color',
         unified,
+        '--end-of-options',
         `${run.target.baseRef}...${run.target.headRef ?? 'HEAD'}`,
         '--',
         path,
       ];
     case 'single_commit':
-      return ['show', '--format=', '--no-ext-diff', '--no-color', unified, run.target.commit, '--', path];
+      return [
+        'show',
+        '--format=',
+        '--no-ext-diff',
+        '--no-color',
+        unified,
+        '--end-of-options',
+        run.target.commit,
+        '--',
+        path,
+      ];
   }
 }
 
@@ -168,6 +179,7 @@ async function resolveFileSource(
       if (input.version === 'base') {
         const mergeBase = await runGit(kaos, [
           'merge-base',
+          '--end-of-options',
           run.target.baseRef,
           run.target.headRef ?? 'HEAD',
         ]);
