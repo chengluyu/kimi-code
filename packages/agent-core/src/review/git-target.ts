@@ -16,6 +16,7 @@ import type {
 } from './types';
 
 const GIT_TIMEOUT_MS = 15_000;
+const UNTRACKED_FILE_PREVIEW_BYTES = 1024 * 1024;
 
 export class ReviewGitTargetError extends Error {
   constructor(
@@ -274,7 +275,7 @@ async function listUntrackedFileChanges(kaos: Kaos): Promise<readonly ReviewFile
 
   for (const path of paths) {
     const filePath = joinGitPath(kaos, kaos.getcwd(), path);
-    const bytes = await kaos.readBytes(filePath);
+    const bytes = await kaos.readBytes(filePath, UNTRACKED_FILE_PREVIEW_BYTES);
     const binary = bytes.includes(0);
     changes.push({
       path,

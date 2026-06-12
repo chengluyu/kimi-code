@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process';
+import { PassThrough, Readable } from 'node:stream';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   getReviewScopeSummary,
@@ -14,6 +15,7 @@ import {
   resolveReviewTarget,
 } from '../../src/review/git-target';
 import { testKaos } from '../fixtures/test-kaos';
+import { createFakeKaos } from '../tools/fixtures/fake-kaos';
 
 const execFileAsync = promisify(execFile);
 
@@ -201,6 +203,40 @@ describe('review git target resolver', () => {
     });
   });
 
+  it('bounds untracked file reads while previewing the working tree', async () => {
+    const readBytes = vi.fn(async (_path: string, _n?: number) => Buffer.from('first\nsecond\n'));
+    const exec = vi.fn(async (...args: string[]) => {
+      const gitArgs = args.slice(3);
+      if (gitArgs.join(' ') === 'rev-parse --is-inside-work-tree') {
+        return processWithOutput('true\n');
+      }
+      if (gitArgs.includes('--name-status')) return processWithOutput('');
+      if (gitArgs.includes('--numstat')) return processWithOutput('');
+      if (gitArgs.join(' ') === 'ls-files --others --exclude-standard -z') {
+        return processWithOutput('large.sql\0');
+      }
+      throw new Error(`unexpected git command: ${gitArgs.join(' ')}`);
+    });
+    const stats = await previewReviewTarget(createFakeKaos({
+      getcwd: () => '/workspace',
+      exec,
+      readBytes,
+    }), { scope: 'working_tree' });
+
+    const readLimit = readBytes.mock.calls[0]?.[1];
+    expect(readLimit).toEqual(expect.any(Number));
+    expect(readLimit).toBeGreaterThan(0);
+    expect(readLimit).toBeLessThanOrEqual(1024 * 1024);
+    expect(stats.files).toEqual([
+      {
+        path: 'large.sql',
+        status: 'untracked',
+        additions: 2,
+        deletions: 0,
+      },
+    ]);
+  });
+
   it('keeps HEAD metadata and omits upstream in detached HEAD state', async () => {
     await withGitRepo(async (repo) => {
       await writeFile(join(repo, 'a.ts'), 'base\n');
@@ -245,4 +281,16 @@ async function gitOutput(repo: string, ...args: readonly string[]): Promise<stri
 
 function numberedLines(prefix: string, count: number): string {
   return Array.from({ length: count }, (_value, index) => `${prefix}-${String(index)}\n`).join('');
+}
+
+function processWithOutput(stdout: string) {
+  return {
+    stdin: new PassThrough(),
+    stdout: Readable.from([stdout]),
+    stderr: Readable.from([]),
+    pid: 1,
+    exitCode: null,
+    wait: vi.fn(async () => 0),
+    kill: vi.fn(async () => {}),
+  };
 }
