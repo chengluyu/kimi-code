@@ -237,7 +237,9 @@ function promptChoice(
         options: input.options.map(toChoiceOption),
         searchable: input.searchable,
         optionSpacing: input.optionSpacing,
-        requestRender: host.state.ui.requestRender,
+        requestRender: () => {
+          host.state.ui.requestRender();
+        },
         onSelect: (value) => {
           host.restoreEditor();
           resolve(value);

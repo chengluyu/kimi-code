@@ -286,6 +286,34 @@ describe('handleReviewCommand', () => {
     await task;
   });
 
+  it('keeps animated selector render requests bound to the TUI object', async () => {
+    vi.useFakeTimers();
+    try {
+      const scheduleRender = vi.fn();
+      const { host } = makeHost();
+      const uiWithReceiverSensitiveRender = {
+        scheduleRender,
+        requestRender(this: { scheduleRender: () => void }) {
+          this.scheduleRender();
+        },
+      };
+      (host.state as { ui: unknown }).ui = uiWithReceiverSensitiveRender;
+      const task = handleReviewCommand(host, '');
+
+      await waitForPicker(host, 1);
+      mountedPicker(host, 0).handleInput(ENTER);
+      await waitForPicker(host, 2);
+
+      expect(() => vi.advanceTimersByTime(120)).not.toThrow();
+      expect(scheduleRender).toHaveBeenCalled();
+
+      mountedPicker(host, 1).handleInput(ESC);
+      await task;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows review scope metadata in the first selector', async () => {
     const { host } = makeHost({
       scopeSummary: {
