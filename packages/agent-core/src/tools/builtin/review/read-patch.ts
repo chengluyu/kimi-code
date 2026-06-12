@@ -61,6 +61,8 @@ export class ReadPatchTool implements BuiltinTool<ReadPatchInput> {
           this.review.recordPatchRead({
             path: args.path,
             hunkId: args.hunk_id,
+            availableHunkIds: result.hunks.map((hunk) => hunk.id),
+            complete: args.hunk_id === undefined,
             ranges: selected.flatMap((hunk) => hunk.ranges),
           });
           return jsonResult({

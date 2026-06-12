@@ -30,7 +30,6 @@ describe('SessionReviewRuntime', () => {
 
     reviewer.recordPatchRead({
       path: 'src/a.ts',
-      hunkId: 'src/a.ts:10',
       ranges: [{ start: 9, end: 12 }],
     });
     const comment = reviewer.addComment({

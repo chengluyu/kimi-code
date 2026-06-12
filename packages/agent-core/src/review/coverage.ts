@@ -8,6 +8,8 @@ export interface ReviewLineRange {
 export interface ReviewPatchCoverageInput {
   readonly path: string;
   readonly hunkId?: string;
+  readonly availableHunkIds?: readonly string[];
+  readonly complete?: boolean;
   readonly ranges?: readonly ReviewLineRange[];
 }
 
@@ -25,6 +27,7 @@ export interface ReviewCoverageMissingItem {
 }
 
 interface FileCoverage {
+  readonly patchRequiredHunkIds: Set<string>;
   readonly patchHunkIds: Set<string>;
   patchRead: boolean;
   fileRead: boolean;
@@ -38,7 +41,12 @@ export class ReviewCoverageTracker {
 
   recordPatchRead(assignmentId: string, input: ReviewPatchCoverageInput): void {
     const file = this.fileCoverage(assignmentId, input.path);
-    file.patchRead = true;
+    for (const hunkId of input.availableHunkIds ?? []) {
+      file.patchRequiredHunkIds.add(hunkId);
+    }
+    if (input.complete === true || (input.complete === undefined && input.hunkId === undefined)) {
+      file.patchRead = true;
+    }
     if (input.hunkId !== undefined) file.patchHunkIds.add(input.hunkId);
     file.patchRanges = mergeRanges([...file.patchRanges, ...normalizeRanges(input.ranges ?? [])]);
   }
@@ -74,7 +82,7 @@ export class ReviewCoverageTracker {
   hasRequiredCoverage(assignment: ReviewAssignment, path: string): boolean {
     const file = this.coverage.get(assignment.id)?.get(path);
     if (file === undefined) return false;
-    if (assignment.requiredCoverage === 'patch') return file.patchRead;
+    if (assignment.requiredCoverage === 'patch') return isPatchCovered(file);
     return isFullFileCovered(file);
   }
 
@@ -96,6 +104,7 @@ export class ReviewCoverageTracker {
     let file = assignment.get(path);
     if (file === undefined) {
       file = {
+        patchRequiredHunkIds: new Set(),
         patchHunkIds: new Set(),
         patchRead: false,
         fileRead: false,
@@ -107,6 +116,15 @@ export class ReviewCoverageTracker {
     }
     return file;
   }
+}
+
+function isPatchCovered(file: FileCoverage): boolean {
+  if (file.patchRead) return true;
+  if (file.patchRequiredHunkIds.size === 0) return false;
+  for (const hunkId of file.patchRequiredHunkIds) {
+    if (!file.patchHunkIds.has(hunkId)) return false;
+  }
+  return true;
 }
 
 function isFullFileCovered(file: FileCoverage): boolean {

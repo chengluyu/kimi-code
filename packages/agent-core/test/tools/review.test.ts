@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -201,6 +201,43 @@ describe('review tools', () => {
     expect(json(commentResult)).toMatchObject({ path: 'src/new.ts', line: 2 });
   });
 
+  it('requires all patch hunks before hunk-filtered ReadPatch satisfies patch coverage', async () => {
+    const review = createReviewer({
+      assignedFiles: ['src/a.ts'],
+      requiredCoverage: 'patch',
+    });
+    const kaos = createFakeKaos({
+      getcwd: () => '/workspace',
+      exec: vi.fn(async () => processWithOutput(twoHunkPatch())),
+    });
+
+    const firstHunk = await executeTool(new ReadPatchTool(kaos, review), context({
+      path: 'src/a.ts',
+      hunk_id: 'hunk-1',
+    }));
+    expect(firstHunk.isError).toBeFalsy();
+
+    const incomplete = await executeTool(new UpdateProgressTool(review), context({
+      status: 'complete',
+      summary: 'only one hunk read',
+    }));
+    expect(incomplete.isError).toBe(true);
+    expect(json(incomplete).error).toContain('src/a.ts (patch)');
+
+    const secondHunk = await executeTool(new ReadPatchTool(kaos, review), context({
+      path: 'src/a.ts',
+      hunk_id: 'hunk-2',
+    }));
+    expect(secondHunk.isError).toBeFalsy();
+
+    const complete = await executeTool(new UpdateProgressTool(review), context({
+      status: 'complete',
+      summary: 'all hunks read',
+    }));
+    expect(complete.isError).toBeFalsy();
+    expect(json(complete)).toMatchObject({ status: 'complete' });
+  });
+
   it('reads file versions and allows full-file completion after coverage is complete', async () => {
     const review = createReviewer({
       assignedFiles: ['src/full.ts'],
@@ -369,12 +406,31 @@ function displayOf(execution: ToolExecution) {
 
 function processWithOutput(stdout: string) {
   return {
-    stdin: { end: vi.fn() },
+    stdin: new PassThrough(),
     stdout: Readable.from([stdout]),
     stderr: Readable.from([]),
+    pid: 1,
+    exitCode: null,
     wait: vi.fn(async () => 0),
-    kill: vi.fn(),
+    kill: vi.fn(async () => {}),
   };
+}
+
+function twoHunkPatch(): string {
+  return [
+    'diff --git a/src/a.ts b/src/a.ts',
+    '--- a/src/a.ts',
+    '+++ b/src/a.ts',
+    '@@ -1,2 +1,2 @@',
+    '-old',
+    '+new',
+    ' context',
+    '@@ -10,2 +10,2 @@',
+    '-old again',
+    '+new again',
+    ' context again',
+    '',
+  ].join('\n');
 }
 
 function createReviewer(input: {
