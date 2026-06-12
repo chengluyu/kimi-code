@@ -206,8 +206,10 @@ export class ReviewOrchestrator {
       });
       return result;
     } catch (error) {
-      if (this.signal.aborted && reviewStarted) {
-        this.options.runtime.clear();
+      if (this.signal.aborted) {
+        if (reviewStarted) {
+          this.options.runtime.clear();
+        }
         this.emitEvent({ type: 'review.cancelled' });
       } else {
         const payload = toKimiErrorPayload(error);

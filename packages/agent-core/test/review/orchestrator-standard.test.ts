@@ -123,6 +123,40 @@ describe('ReviewOrchestrator standard review', () => {
     });
   });
 
+  it('emits cancellation when aborted before the review run starts', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const launcher = createPendingLauncher();
+      const events: AgentEvent[] = [];
+      const loadRepoInstructions = deferred<string>();
+      let loadStarted = false;
+      const orchestrator = createOrchestrator(
+        repo,
+        runtime,
+        launcher,
+        (event) => {
+          events.push(event);
+        },
+        async () => {
+          loadStarted = true;
+          return loadRepoInstructions.promise;
+        },
+      );
+      const review = orchestrator.start({
+        target: { scope: 'working_tree' },
+        intensity: 'standard',
+      });
+      await waitUntil(() => loadStarted);
+
+      orchestrator.cancel();
+      loadRepoInstructions.resolve('Review repo instructions.');
+
+      await expect(review).rejects.toThrow('Aborted by the user');
+      expect(runtime.getActiveRun()).toBeNull();
+      expect(events.map((event) => event.type)).toEqual(['review.cancelled']);
+    });
+  });
+
   it('emits a structured provider error when reviewer execution fails', async () => {
     await withModifiedRepo(async (repo) => {
       const runtime = createRuntime();
@@ -168,13 +202,14 @@ function createOrchestrator(
   runtime: SessionReviewRuntime,
   launcher: ReviewWorkerLauncher,
   emitEvent?: (event: AgentEvent) => void,
+  loadRepoInstructions?: () => Promise<string>,
 ): ReviewOrchestrator {
   const kaos = testKaos.withCwd(repo);
   return new ReviewOrchestrator({
     kaos,
     runtime,
     launcher,
-    loadRepoInstructions: async () => 'Review repo instructions.',
+    loadRepoInstructions: loadRepoInstructions ?? (async () => 'Review repo instructions.'),
     emitEvent,
   });
 }
@@ -239,6 +274,17 @@ function handle(completion: Promise<{ readonly result: string }>): SubagentHandl
     resumed: false,
     completion,
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 function markPatchRead(review: ReviewAgentFacade): void {
