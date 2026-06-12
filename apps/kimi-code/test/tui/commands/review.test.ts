@@ -243,6 +243,22 @@ describe('handleReviewCommand', () => {
     expect(session.startReview).not.toHaveBeenCalled();
   });
 
+  it('removes the preview status when plan preview fails', async () => {
+    const { host, session, transientStatusClear } = makeHost();
+    session.previewReviewPlan.mockRejectedValueOnce(new Error('plan failed'));
+    const task = handleReviewCommand(host, '');
+
+    await waitForPicker(host, 1);
+    mountedPicker(host, 0).handleInput(ENTER);
+    await waitForPicker(host, 2);
+    mountedPicker(host, 1).handleInput(DOWN);
+    mountedPicker(host, 1).handleInput(ENTER);
+
+    await expect(task).rejects.toThrow('plan failed');
+    expect(transientStatusClear).toHaveBeenCalledTimes(1);
+    expect(session.startReview).not.toHaveBeenCalled();
+  });
+
   it('does not show a duplicate command error after a review failure event', async () => {
     const { host, session, spinnerStop } = makeHost();
     session.startReview.mockImplementationOnce(async () => {

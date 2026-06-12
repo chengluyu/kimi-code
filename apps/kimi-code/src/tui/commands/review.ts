@@ -49,32 +49,29 @@ export async function handleReviewCommand(host: SlashCommandHost, args: string):
   }
   const previewStatus = host.showTransientStatus(`Reviewing ${formatReviewStats(preview.stats)}.`);
 
-  const intensity = await promptReviewIntensity(host);
-  if (intensity === undefined) {
-    previewStatus.clear();
-    return;
-  }
-  const plan = intensity === 'standard'
-    ? undefined
-    : await session.previewReviewPlan({
+  try {
+    const intensity = await promptReviewIntensity(host);
+    if (intensity === undefined) return;
+    const plan = intensity === 'standard'
+      ? undefined
+      : await session.previewReviewPlan({
+        target: preview.target,
+        intensity,
+        focus,
+      });
+    if (plan !== undefined) {
+      const confirmed = await promptReviewPerspectiveConfirmation(host, plan);
+      if (!confirmed) return;
+    }
+
+    await startReview(host, {
       target: preview.target,
       intensity,
       focus,
     });
-  if (plan !== undefined) {
-    const confirmed = await promptReviewPerspectiveConfirmation(host, plan);
-    if (!confirmed) {
-      previewStatus.clear();
-      return;
-    }
+  } finally {
+    previewStatus.clear();
   }
-  previewStatus.clear();
-
-  await startReview(host, {
-    target: preview.target,
-    intensity,
-    focus,
-  });
 }
 
 async function resolveReviewTargetFromScope(
