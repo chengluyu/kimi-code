@@ -183,14 +183,16 @@ async function startReview(
   host: SlashCommandHost,
   input: ReviewStartInput,
 ): Promise<void> {
-  const spinner = host.showProgressSpinner('Reviewing changes…');
+  const spinner = input.intensity === 'deep'
+    ? undefined
+    : host.showProgressSpinner('Reviewing changes…');
   host.state.reviewActive = true;
   host.state.reviewResultPending = true;
   try {
     const result = await host.requireSession().startReview(input);
     host.state.reviewActive = false;
     const complete = result.status === 'complete';
-    spinner.stop({
+    spinner?.stop({
       ok: complete,
       label: complete ? 'Review completed.' : 'Review blocked.',
     });
@@ -205,14 +207,14 @@ async function startReview(
     const reviewEventHandled = host.state.reviewActive === false;
     host.state.reviewActive = false;
     if (message.toLowerCase().includes('aborted')) {
-      spinner.stop({ ok: false, label: 'Review cancelled.' });
+      spinner?.stop({ ok: false, label: 'Review cancelled.' });
       return;
     }
     if (reviewEventHandled) {
-      spinner.stop({ ok: false, label: 'Review stopped.' });
+      spinner?.stop({ ok: false, label: 'Review stopped.' });
       return;
     }
-    spinner.stop({ ok: false, label: `Review stopped: ${message}` });
+    spinner?.stop({ ok: false, label: `Review stopped: ${message}` });
     host.showError(`Review stopped: ${message}`);
   } finally {
     host.state.reviewResultPending = false;

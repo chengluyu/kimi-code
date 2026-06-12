@@ -447,8 +447,9 @@ describe('SessionEventHandler review events', () => {
     const output = progress.render(112).join('\n').replaceAll(/\u001B\[[0-9;]*m/g, '');
 
     expect(output).toContain('A-01');
-    expect(output).toContain('important: src/a.ts:7 Validate request');
+    expect(output).toContain('1 comment: important: src/a.ts:7 Vali');
     expect(output).toContain('Reviewing...');
+    expect(output).toContain('0/1 files reviewed');
     expect(appendedEntries(host).map((entry) => entry.reviewData?.title)).toEqual([
       'Review started',
     ]);

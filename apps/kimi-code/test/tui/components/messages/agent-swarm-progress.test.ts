@@ -966,6 +966,16 @@ describe('ReviewSwarmProgressComponent', () => {
       title: 'Validate request',
       body: 'The request should be validated.',
     });
+    component.handleCommentAdded({
+      id: 'review-comment-2',
+      assignmentId: 'review-assignment-1',
+      state: 'candidate',
+      severity: 'minor',
+      path: 'src/b.ts',
+      line: 11,
+      title: 'Trim output',
+      body: 'The output can be shorter.',
+    });
     component.handleAssignmentProgress({
       assignmentId: 'review-assignment-1',
       status: 'complete',
@@ -980,9 +990,10 @@ describe('ReviewSwarmProgressComponent', () => {
     expect(output).toContain('B Security and data safety');
     expect(output).toContain('A-01');
     expect(output).toContain('B-01');
-    expect(output).toContain('important: src/a.ts:7 Validate request');
+    expect(output).toContain('2 comments: minor: src/b.ts:11 Trim o');
+    expect(output).toMatch(/A-01 \[⣿+]/);
     expect(output).toContain('Reviewing...');
-    expect(output).toContain('0/2 files');
+    expect(output).toContain('0/2 files reviewed');
   });
 });
 

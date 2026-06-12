@@ -11,12 +11,14 @@ import {
   SwarmProgressComponent,
   type SwarmProgressCellLabel,
   type SwarmProgressLegendItem,
+  type SwarmProgressMemberProgress,
   type SwarmProgressMemberRenderInput,
   type SwarmProgressOptions,
 } from './swarm-progress';
 
 const REVIEW_SWARM_METADATA_KEY = 'review_swarm';
 const REVIEW_STATUS_BAR_CHAR = '━';
+const REVIEW_ACTIVE_MEMBER_PROGRESS_RATIO = 0.12;
 
 export interface ReviewSwarmProgressOptions {
   readonly description: string;
@@ -48,8 +50,14 @@ interface ReviewSwarmItem {
 interface ReviewSwarmRuntimeState {
   readonly metadata: ReviewSwarmMetadata;
   readonly assignmentIndexById: Map<string, number>;
-  readonly latestCommentByIndex: Map<number, string>;
+  readonly latestCommentByIndex: Map<number, ReviewSwarmCommentLabel>;
+  readonly commentCountByIndex: Map<number, number>;
   readonly progressByIndex: Map<number, ReviewEventProgress>;
+}
+
+interface ReviewSwarmCommentLabel {
+  readonly count: number;
+  readonly text: string;
 }
 
 export class ReviewSwarmProgressComponent implements Component {
@@ -62,6 +70,7 @@ export class ReviewSwarmProgressComponent implements Component {
       metadata,
       assignmentIndexById: new Map(),
       latestCommentByIndex: new Map(),
+      commentCountByIndex: new Map(),
       progressByIndex: new Map(),
     };
     const panelOptions: SwarmProgressOptions = {
@@ -71,6 +80,7 @@ export class ReviewSwarmProgressComponent implements Component {
       statusLabels: { working: 'Reviewing...' },
       formatMemberId: ({ index }) => reviewSwarmMemberId(metadata, index),
       cellLabel: (input) => reviewSwarmCellLabel(state, input),
+      memberProgress: (input) => reviewSwarmMemberProgress(state, input),
       footerBar: ({ width, colors }) => renderReviewFooterBar(state, width, colors),
       requestRender: options.requestRender,
       availableGridHeight: options.availableGridHeight,
@@ -196,9 +206,14 @@ export class ReviewSwarmProgressComponent implements Component {
     if (comment.assignmentId === undefined) return;
     const index = this.state.assignmentIndexById.get(comment.assignmentId);
     if (index === undefined) return;
+    const count = (this.state.commentCountByIndex.get(index) ?? 0) + 1;
+    this.state.commentCountByIndex.set(index, count);
     this.state.latestCommentByIndex.set(
       index,
-      `${comment.severity}: ${comment.path}:${String(comment.line)} ${comment.title}`,
+      {
+        count,
+        text: `${comment.severity}: ${comment.path}:${String(comment.line)} ${comment.title}`,
+      },
     );
   }
 }
@@ -246,13 +261,42 @@ function reviewSwarmCellLabel(
 ): SwarmProgressCellLabel | undefined {
   const latestComment = state.latestCommentByIndex.get(input.index);
   if (latestComment !== undefined) {
-    return { text: latestComment };
+    return {
+      text: `${String(latestComment.count)} ${latestComment.count === 1 ? 'comment' : 'comments'}: ${latestComment.text}`,
+    };
   }
   const progress = Array.from(state.progressByIndex.values())
     .find((entry) => state.assignmentIndexById.get(entry.assignmentId) === input.index);
   if (progress?.summary !== undefined) return { text: progress.summary };
   if (progress?.blocker !== undefined) return { text: progress.blocker };
   return undefined;
+}
+
+function reviewSwarmMemberProgress(
+  state: ReviewSwarmRuntimeState,
+  input: SwarmProgressMemberRenderInput & { readonly capacityTicks: number },
+): SwarmProgressMemberProgress {
+  const progress = state.progressByIndex.get(input.index);
+  if (progress?.status === 'complete' || input.snapshot.phase === 'completed') {
+    return { displayTicks: input.capacityTicks, phase: 'completed' };
+  }
+  if (progress?.status === 'blocked' || input.snapshot.phase === 'failed') {
+    return { displayTicks: input.capacityTicks, phase: 'failed' };
+  }
+  if (
+    progress?.status === 'active' ||
+    assignmentIdForItemIndex(state, input.index) !== undefined ||
+    input.snapshot.phase === 'running'
+  ) {
+    return {
+      displayTicks: Math.min(
+        input.capacityTicks,
+        Math.max(1, Math.ceil(input.capacityTicks * REVIEW_ACTIVE_MEMBER_PROGRESS_RATIO)),
+      ),
+      phase: 'running',
+    };
+  }
+  return { displayTicks: 0, phase: input.snapshot.phase };
 }
 
 function renderReviewFooterBar(
@@ -263,7 +307,7 @@ function renderReviewFooterBar(
   const totalFiles = reviewSwarmFiles(state.metadata).length;
   const reviewedFiles = reviewedReviewSwarmFiles(state).length;
   const failedFiles = failedReviewSwarmFiles(state).length;
-  const countText = `${String(reviewedFiles)}/${String(totalFiles)} files`;
+  const countText = `${String(reviewedFiles)}/${String(totalFiles)} files reviewed`;
   const count = chalk.hex(colors.textDim)(countText);
   const gap = ' ';
   const barWidth = Math.max(1, width - visibleWidth(countText) - visibleWidth(gap));
@@ -337,7 +381,7 @@ function perspectiveLetter(index: number): string {
   let value = Math.max(0, Math.floor(index));
   let label = '';
   do {
-    label = String.fromCharCode(65 + value % 26) + label;
+    label = String.fromCodePoint(65 + value % 26) + label;
     value = Math.floor(value / 26) - 1;
   } while (value >= 0);
   return label;

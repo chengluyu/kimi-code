@@ -544,8 +544,8 @@ describe('handleReviewCommand', () => {
     expect(transientStatusClear).toHaveBeenCalledTimes(1);
   });
 
-  it('selects a single commit and starts a Deep Review', async () => {
-    const { host, session } = makeHost({
+  it('selects a single commit and starts a Deep Review without the duplicate command spinner', async () => {
+    const { host, session, spinnerStop } = makeHost({
       commits: [{ sha: 'abc123def456', title: 'change commit' }],
     });
     const task = handleReviewCommand(host, '');
@@ -585,5 +585,7 @@ describe('handleReviewCommand', () => {
         intensity: 'deep',
       }),
     );
+    expect(host.showProgressSpinner).not.toHaveBeenCalled();
+    expect(spinnerStop).not.toHaveBeenCalled();
   });
 });
