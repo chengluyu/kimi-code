@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionReviewRuntime, type ReviewAgentFacade } from '../../src/review';
@@ -229,6 +231,47 @@ describe('review tools', () => {
     expect(json(progress)).toMatchObject({ status: 'complete' });
   });
 
+  it('does not count base file reads as full-file coverage for modified files', async () => {
+    const review = createReviewer({
+      assignedFiles: ['src/full.ts'],
+      requiredCoverage: 'full_file',
+      files: [{ path: 'src/full.ts', status: 'modified', additions: 1, deletions: 0 }],
+    });
+    const kaos = createFakeKaos({
+      getcwd: () => '/workspace',
+      readText: vi.fn().mockResolvedValue('base\nchanged\n'),
+      exec: vi.fn().mockResolvedValue(processWithOutput('base\nold\n')),
+    });
+
+    const baseRead = await executeTool(new ReadFileVersionTool(kaos, review), context({
+      path: 'src/full.ts',
+      version: 'base',
+      n_lines: 2,
+    }));
+    expect(baseRead.isError).toBeFalsy();
+
+    const incompleteProgress = await executeTool(new UpdateProgressTool(review), context({
+      status: 'complete',
+      summary: 'base file read',
+    }));
+    expect(incompleteProgress.isError).toBe(true);
+    expect(json(incompleteProgress).error).toContain('src/full.ts (full_file)');
+
+    const currentRead = await executeTool(new ReadFileVersionTool(kaos, review), context({
+      path: 'src/full.ts',
+      version: 'current',
+      n_lines: 2,
+    }));
+    expect(currentRead.isError).toBeFalsy();
+
+    const progress = await executeTool(new UpdateProgressTool(review), context({
+      status: 'complete',
+      summary: 'changed file read',
+    }));
+    expect(progress.isError).toBeFalsy();
+    expect(json(progress)).toMatchObject({ status: 'complete' });
+  });
+
   it('merges comments with provenance and dismisses duplicates', async () => {
     const runtime = createRuntime();
     runtime.startReview(
@@ -322,6 +365,16 @@ function json(result: { readonly output: unknown }): any {
 function displayOf(execution: ToolExecution) {
   if (!('execute' in execution)) throw new Error('expected runnable tool execution');
   return execution.display;
+}
+
+function processWithOutput(stdout: string) {
+  return {
+    stdin: { end: vi.fn() },
+    stdout: Readable.from([stdout]),
+    stderr: Readable.from([]),
+    wait: vi.fn(async () => 0),
+    kill: vi.fn(),
+  };
 }
 
 function createReviewer(input: {

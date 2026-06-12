@@ -16,6 +16,7 @@ export interface ReviewFileVersionCoverageInput {
   readonly lineOffset: number;
   readonly nLines: number;
   readonly totalLines: number;
+  readonly changedVersion: boolean;
 }
 
 export interface ReviewCoverageMissingItem {
@@ -43,6 +44,7 @@ export class ReviewCoverageTracker {
   }
 
   recordFileVersionRead(assignmentId: string, input: ReviewFileVersionCoverageInput): void {
+    if (!input.changedVersion) return;
     const file = this.fileCoverage(assignmentId, input.path);
     file.fileRead = true;
     file.totalLines = input.totalLines;

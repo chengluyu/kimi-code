@@ -12,7 +12,13 @@ import {
   lineRangeLabel,
   reviewDisplay,
 } from './display';
-import { jsonError, jsonResult, readFileVersionForTarget, requireAssignedPath } from './support';
+import {
+  isChangedFileVersionRead,
+  jsonError,
+  jsonResult,
+  readFileVersionForTarget,
+  requireAssignedPath,
+} from './support';
 
 export const ReadFileVersionInputSchema = z
   .object({
@@ -50,7 +56,8 @@ export class ReadFileVersionTool implements BuiltinTool<ReadFileVersionInput> {
       execute: async () => {
         try {
           requireAssignedPath(this.review, args.path);
-          const result = await readFileVersionForTarget(this.kaos, this.review.getActiveRun(), {
+          const run = this.review.getActiveRun();
+          const result = await readFileVersionForTarget(this.kaos, run, {
             path: args.path,
             version: args.version,
             ref: args.ref,
@@ -62,6 +69,7 @@ export class ReadFileVersionTool implements BuiltinTool<ReadFileVersionInput> {
             lineOffset: result.lineOffset,
             nLines: result.nLines,
             totalLines: result.totalLines,
+            changedVersion: isChangedFileVersionRead(run, result),
           });
           return jsonResult({
             path: result.path,

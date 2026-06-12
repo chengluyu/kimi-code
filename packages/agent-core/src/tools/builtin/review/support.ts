@@ -108,6 +108,27 @@ export async function readFileVersionForTarget(
   };
 }
 
+export function isChangedFileVersionRead(
+  run: ReviewRuntimeRun,
+  result: Pick<ReadFileVersionResult, 'path' | 'version'>,
+): boolean {
+  if (result.version === 'ref') return false;
+  const file = run.stats?.files.find((item) => item.path === result.path);
+  if (file?.status === 'deleted') {
+    if (run.target.scope === 'working_tree') {
+      return result.version === 'base' || result.version === 'head';
+    }
+    return result.version === 'base';
+  }
+  switch (run.target.scope) {
+    case 'working_tree':
+      return result.version === 'current';
+    case 'current_branch':
+    case 'single_commit':
+      return result.version === 'head';
+  }
+}
+
 function patchArgs(run: ReviewRuntimeRun, path: string, unified: string): readonly string[] {
   switch (run.target.scope) {
     case 'working_tree':

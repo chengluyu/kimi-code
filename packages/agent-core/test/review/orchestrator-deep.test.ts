@@ -284,6 +284,7 @@ function markFullFileRead(review: ReviewAgentFacade): void {
       lineOffset: 1,
       nLines: 10,
       totalLines: 10,
+      changedVersion: true,
     });
   }
 }

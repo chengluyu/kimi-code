@@ -77,6 +77,7 @@ describe('SessionReviewRuntime', () => {
       lineOffset: 1,
       nLines: 50,
       totalLines: 100,
+      changedVersion: true,
     });
     expect(() => reviewer.updateProgress({ status: 'complete' })).toThrow(
       'src/large.ts (full_file)',
@@ -87,6 +88,7 @@ describe('SessionReviewRuntime', () => {
       lineOffset: 51,
       nLines: 50,
       totalLines: 100,
+      changedVersion: true,
     });
     expect(reviewer.updateProgress({ status: 'complete' })).toMatchObject({
       status: 'complete',
