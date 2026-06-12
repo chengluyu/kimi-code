@@ -12,7 +12,8 @@ The platform should let a developer:
 - Drive each session with a declarative YAML workflow.
 - Configure each session's command, arguments, working directory, environment, terminal columns, and terminal rows.
 - Record what the PTY produced and what scripted user input was sent.
-- Replay each run in a web interface, including real-time timing.
+- Watch each running PTY session live in a web interface.
+- Replay each finished run in the same web interface, including real-time timing.
 - Mark user actions and checkpoints on the replay progress bar.
 - Validate visible text and ANSI terminal attributes, such as foreground color, background color, and text style.
 
@@ -48,6 +49,117 @@ The platform has five pieces:
    Lists runs and replays event logs in a browser-based terminal player.
 
 This is a new web app. It should not be designed as an enhancement to the existing session visualizer. Shared utilities are fine as an implementation detail, but the product surface is a separate run inspection app for TTY workflows.
+
+## Developer Workflows
+
+Design the product around what a developer needs to do in the web app. API details are implementation support, not the main design.
+
+### Launch Runs
+
+The developer can start a run from the web app by choosing a YAML scenario. Before launch, they can review and override:
+
+- Scenario file.
+- Command and arguments.
+- Working directory.
+- Environment overrides.
+- Terminal columns and rows.
+- Run label or description.
+
+The developer can also launch a suite that starts many scenarios at once. A suite starts the listed runs together and groups their results in the UI.
+
+### Monitor Running Sessions
+
+The dashboard shows all active and recent runs. It should make the current state obvious without opening every run.
+
+Each run card shows:
+
+- Scenario name and run ID.
+- Status: `running`, `waiting`, `passed`, `failed`, `killed`, or `crashed`.
+- Current scenario step.
+- Current wait or assertion, if one is active.
+- Elapsed time.
+- Time since last PTY output.
+- Command, working directory, and terminal size.
+- Assertion count and failure count.
+- Exit code or signal, once the process exits.
+
+The dashboard should support a compact "terminal wall" view for many running sessions. Each card can show the latest reconstructed terminal state or a compact text preview, enough to spot runs that are stuck, waiting for input, completed, or failed.
+
+### View A Session Live
+
+The developer can open a running session and watch the terminal update as events arrive.
+
+The live view should support:
+
+- Auto-follow output while the developer is watching live.
+- Pause viewing without pausing the process.
+- Return to live after pausing or jumping around.
+- Stop or kill the process.
+- Show the current scenario step beside the terminal.
+- Show the active `waitForText`, `assertText`, or `assertRegion` beside the terminal.
+- Show scripted user input and explicit markers on the timeline as they happen.
+
+Live viewing and replay use the same event log. The live view is just a player attached to a run that is still recording.
+
+### Inspect Failures First
+
+When a run fails, the UI should open at the useful point by default.
+
+For a failed assertion, show:
+
+- The failed step.
+- Expected text or region attributes.
+- Actual visible text.
+- Actual cell attributes for failed region checks.
+- The terminal state at failure time.
+- Nearby user input, markers, resize events, and PTY output events.
+
+For a crashed or killed run, show:
+
+- Final reconstructed terminal state.
+- Exit code or signal.
+- Last scenario step reached.
+- Last PTY output time.
+- Recent event list.
+
+### Replay A Run
+
+The developer can replay a finished or running run from the beginning.
+
+The player should support:
+
+- Play and pause.
+- Speed control.
+- Jump to a marker.
+- Jump to a user input event.
+- Jump to an assertion.
+- Jump to process exit.
+- Jump to start or end.
+- Show raw event details around the current replay time.
+- Search visible text and event metadata.
+
+The first version does not need fast arbitrary seeking. If a user jumps to a late point in a long run, the player may replay events from the start to reconstruct that point.
+
+### Rerun And Compare
+
+The developer can rerun the same scenario with the same parameters.
+
+The UI should support:
+
+- Rerun.
+- Clone run parameters and edit before launch.
+- Group reruns together.
+- Compare current status, duration, exit status, and assertion results across reruns.
+
+### Handy Features
+
+These are not required for the first usable slice, but the design should leave room for them:
+
+- YAML scenario editor with validation before launch.
+- Saved parameter presets for common commands, working directories, terminal sizes, and environment overrides.
+- No-output warning when a run has produced no PTY output for a configurable time.
+- Shareable local links to a run, marker, timestamp, or failed assertion.
+- Run history filters by scenario, status, command, working directory, label, and time.
 
 ## Run Configuration
 
@@ -245,11 +357,11 @@ tty-runs/
 
 `assertions.json` stores assertion summaries for fast list views. The source of truth remains the event log.
 
-## Replay
+## Live And Replay
 
-The web player replays events in timestamp order.
+The web player consumes events in timestamp order. For a running process, it follows new events as they are recorded. For a completed process, it replays the stored event log.
 
-Replay behavior:
+Player behavior:
 
 - PTY output events are written into the browser terminal player.
 - User input events are shown as progress-bar markers and optional inline annotations.
@@ -258,11 +370,14 @@ Replay behavior:
 - Resize events resize the browser terminal model at the correct replay time.
 - Process exit is shown as the terminal state.
 
-Replay should support:
+Player controls:
 
 - Play and pause.
+- Auto-follow for live runs.
+- Return to live for running sessions.
 - Speed control.
 - Jump to marker.
+- Jump to user input.
 - Jump to assertion.
 - Jump to start or end.
 - Show final screen.
@@ -316,42 +431,50 @@ If the process crashes or is killed:
 
 No repair or resume flow is included.
 
-## Web API
+## Web App
 
-Add routes to the new web app server.
-
-Suggested routes:
-
-- `GET /api/runs`
-- `POST /api/runs`
-- `GET /api/runs/:id`
-- `GET /api/runs/:id/events`
-- `POST /api/runs/:id/stop`
-- `GET /api/suites`
-- `POST /api/suites`
-- `GET /api/suites/:id`
-
-`POST /api/runs` accepts a scenario file path or inline YAML. The first version can support file paths only if that is simpler.
-
-`POST /api/suites` accepts a suite YAML file and starts the listed scenarios concurrently.
-
-## Web UI
-
-Build a new web app for run inspection.
+Build a new web app for run inspection and live monitoring.
 
 Views:
 
-1. **Run List**
-   Shows run ID, scenario name, status, command, cwd, start time, duration, exit code, suite ID, and assertion summary.
+1. **Launcher**
+   Starts one run from a scenario or starts a suite. Lets the developer override command, arguments, working directory, environment, terminal size, and labels before launch.
 
-2. **Run Detail**
-   Shows metadata, event counts, assertion results, and replay player.
+2. **Dashboard**
+   Shows active and recent runs. Includes status, current step, active wait or assertion, elapsed time, last output time, command, working directory, terminal size, and assertion summary.
 
-3. **Replay Player**
-   Shows a terminal replay with timeline markers for user input, explicit marks, assertions, resize events, and process exit.
+3. **Terminal Wall**
+   Shows many running sessions in compact cards, with enough terminal preview to identify stuck, waiting, completed, failed, and crashed runs.
 
-4. **Suite Detail**
-   Shows all runs launched together, their current status, assertion summaries, and quick links into each replay.
+4. **Run Detail**
+   Shows metadata, event counts, assertion results, current step, and the live/replay player.
+
+5. **Live/Replay Player**
+   Shows a terminal player with timeline markers for user input, explicit marks, assertions, resize events, and process exit. For running sessions it can follow live output. For completed sessions it replays the stored event log.
+
+6. **Failure Inspector**
+   Opens at the failed assertion or process exit. Shows expected values, actual terminal state, nearby events, and the final reconstructed screen.
+
+7. **Suite Detail**
+   Shows all runs launched together, their current status, assertion summaries, and quick links into each live view or replay.
+
+8. **Run History**
+   Searches and filters previous runs by scenario, status, command, working directory, label, and time.
+
+## Server Support
+
+The web app needs server support for these capabilities. The exact route shape is an implementation detail.
+
+- Start one run from YAML.
+- Start a suite that launches many runs together.
+- List active, recent, and historical runs.
+- Read run metadata and assertion summaries.
+- Stream new events for live viewing.
+- Read stored event logs for replay.
+- Stop or kill a run.
+- Rerun a prior run with the same parameters.
+- Clone prior run parameters for editing before launch.
+- Read raw event details around a timestamp, marker, assertion, or process exit.
 
 ## Implementation Phases
 
@@ -361,19 +484,24 @@ Views:
 4. Add YAML step executor for `send`, `key`, `sleepMs`, `resize`, `waitForText`, `assertText`, `assertRegion`, and `mark`.
 5. Add validation against a terminal model, including visible text and ANSI cell attributes.
 6. Add run storage and background gzip compression after completion.
-7. Add API routes for listing runs, reading run metadata, reading event logs, stopping runs, creating suites, and listing suite runs.
-8. Add new web app run list, suite detail, and run detail pages.
-9. Add browser terminal replay with progress markers.
-10. Add one sample code-review scenario.
+7. Add live event streaming support for running sessions.
+8. Add server support for launch, list, detail, stop, rerun, suites, stored replay, and raw event inspection.
+9. Add new web app launcher, dashboard, terminal wall, run detail, live/replay player, failure inspector, suite detail, and run history.
+10. Add one sample code-review scenario and one sample suite.
 
 ## Acceptance Criteria
 
 - A developer can start one hidden Kimi TUI session from a YAML scenario.
 - A developer can start many hidden Kimi TUI sessions concurrently from individual scenarios or a suite file.
+- A developer can monitor all active sessions from a dashboard.
+- A developer can open any running session and watch the terminal live.
+- A developer can pause the live view without pausing the process, then return to live.
 - The scenario can type commands and press keys without manual interaction.
 - The run records timestamped PTY output and scripted user input.
 - The web UI can replay the run in timing order.
 - User input, explicit marks, assertions, resize events, and process exit are visible on the replay timeline.
+- A failed run opens directly at the failed assertion or process exit.
+- A developer can rerun a prior run with the same parameters.
 - `waitForText` can wait for text on the visible terminal screen.
 - `assertText` can validate text on the visible terminal screen.
 - `assertRegion` can validate visible text and ANSI attributes in a rectangular terminal region.
