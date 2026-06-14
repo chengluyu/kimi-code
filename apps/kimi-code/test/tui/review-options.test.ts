@@ -52,6 +52,7 @@ describe('formatReviewCompactMarkdown', () => {
 describe('formatReviewArtifactCompactMarkdown', () => {
   const artifact: ReviewArtifact = {
     id: 2,
+    slug: 'races-on-login',
     createdAt: '2026-06-14T14:30:52Z',
     target: { scope: 'working_tree' },
     intensity: 'standard',
@@ -91,13 +92,13 @@ describe('formatReviewArtifactCompactMarkdown', () => {
 
   it('exports full Markdown excluding rejected findings from severity groups', () => {
     const md = formatReviewArtifactMarkdown(artifact);
-    expect(md).toContain('# Code review 2');
+    expect(md).toContain('# Code review: races-on-login');
     expect(md).toContain('## Critical');
     expect(md).toContain('### Races on login');
     expect(md).toContain('`src/a.ts:8`');
     // Rejected finding is not under a severity group, only in the Rejected section.
     expect(md).not.toContain('## Minor');
     expect(md).toContain('## Rejected');
-    expect(md).toContain('- ~~`src/b.ts:3` — Redundant clone~~');
+    expect(md).toContain('- ~~src/b.ts:3 — Redundant clone~~');
   });
 });

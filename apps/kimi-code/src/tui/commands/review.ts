@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -40,16 +41,16 @@ export async function handleReviewCommand(host: SlashCommandHost, args: string):
     return;
   }
 
-  const [subcommand, ...rest] = args.trim().split(/\s+/);
-  if (subcommand === 'read') return handleReviewRead(host, rest[0]);
-  if (subcommand === 'export') return handleReviewExport(host, rest[0]);
+  const invocation = parseReviewCommand(args);
+  if (invocation.kind === 'read') return handleReviewRead(host, invocation.idArg);
+  if (invocation.kind === 'export') return handleReviewExport(host, invocation.idArg);
 
   if (host.state.appState.model.trim().length === 0) {
     host.showError(LLM_NOT_SET_MESSAGE);
     return;
   }
 
-  const focus = args.trim() || undefined;
+  const focus = invocation.focus;
   const scope = await promptReviewScope(host);
   if (scope === undefined) return;
 
@@ -88,6 +89,26 @@ export async function handleReviewCommand(host: SlashCommandHost, args: string):
   }
 }
 
+export type ReviewCommandInvocation =
+  | { readonly kind: 'read'; readonly idArg: string | undefined }
+  | { readonly kind: 'export'; readonly idArg: string | undefined }
+  | { readonly kind: 'start'; readonly focus: string | undefined };
+
+/**
+ * Parse `/review` arguments. `read`/`export` are only treated as subcommands
+ * when followed by at most one token (an id/slug) — so a free-form focus like
+ * "read the auth flow" still starts a review instead of being misrouted.
+ */
+export function parseReviewCommand(args: string): ReviewCommandInvocation {
+  const trimmed = args.trim();
+  const parts = trimmed.split(/\s+/).filter((part) => part.length > 0);
+  const [head, ...rest] = parts;
+  if ((head === 'read' || head === 'export') && rest.length <= 1) {
+    return { kind: head, idArg: rest[0] };
+  }
+  return { kind: 'start', focus: trimmed.length > 0 ? trimmed : undefined };
+}
+
 async function handleReviewRead(host: SlashCommandHost, idArg: string | undefined): Promise<void> {
   const session = host.requireSession();
   const id = await resolveReviewId(host, idArg, 'Open review');
@@ -109,13 +130,25 @@ async function handleReviewExport(host: SlashCommandHost, idArg: string | undefi
     host.showError(`Review ${String(id)} was not found.`);
     return;
   }
-  const file = join(process.cwd(), `review-${String(id)}.md`);
+  const file = uniqueExportPath(artifact.slug);
   try {
     await writeFile(file, formatReviewArtifactMarkdown(artifact), 'utf8');
-    host.showStatus(`Exported review ${String(id)} to ${file}.`);
+    host.showStatus(`Exported review to ${file}.`);
   } catch (error) {
     host.showError(`Could not export review: ${formatErrorMessage(error)}`);
   }
+}
+
+/** Pick a `review-<slug>.md` path in the cwd that does not already exist. */
+function uniqueExportPath(slug: string): string {
+  const base = `review-${slug}`;
+  let candidate = join(process.cwd(), `${base}.md`);
+  let counter = 2;
+  while (existsSync(candidate)) {
+    candidate = join(process.cwd(), `${base}-${String(counter)}.md`);
+    counter += 1;
+  }
+  return candidate;
 }
 
 async function resolveReviewId(
@@ -123,13 +156,15 @@ async function resolveReviewId(
   idArg: string | undefined,
   title: string,
 ): Promise<number | undefined> {
+  const reviews = await host.requireSession().listReviews();
   if (idArg !== undefined && idArg.length > 0) {
+    const bySlug = reviews.find((review) => review.slug === idArg);
+    if (bySlug !== undefined) return bySlug.id;
     const parsed = Number(idArg);
-    if (Number.isInteger(parsed) && parsed > 0) return parsed;
-    host.showError(`"${idArg}" is not a valid review id.`);
+    if (Number.isInteger(parsed) && reviews.some((review) => review.id === parsed)) return parsed;
+    host.showError(`No review named "${idArg}" in this session.`);
     return undefined;
   }
-  const reviews = await host.requireSession().listReviews();
   if (reviews.length === 0) {
     host.showStatus('No saved reviews in this session yet.');
     return undefined;
@@ -138,7 +173,7 @@ async function resolveReviewId(
     title,
     options: reviews.toReversed().map((review) => ({
       value: String(review.id),
-      label: `Review ${String(review.id)} · ${review.commentCount} ${review.commentCount === 1 ? 'finding' : 'findings'}`,
+      label: `${review.slug} · ${review.commentCount} ${review.commentCount === 1 ? 'finding' : 'findings'}`,
       description: `${reviewScopeLabel(review.scope)} · ${String(review.criticalCount)} critical · ${String(review.rejectedCount)} rejected`,
     })),
     searchable: true,
@@ -172,18 +207,20 @@ function openReviewReader(host: SlashCommandHost, artifact: ReviewArtifact): voi
 async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult): Promise<void> {
   if (result.reviewId === undefined || result.comments.length === 0) return;
   const reviewId = result.reviewId;
+  const handle = result.reviewSlug ?? String(reviewId);
+  const statusWord = result.status === 'complete' ? 'complete' : 'blocked';
   const choice = await promptChoice(host, {
-    title: `Review ${String(reviewId)} complete`,
+    title: `Review ${statusWord}: ${handle}`,
     options: [
       {
         value: 'browse',
         label: 'Browse comments',
-        description: `Read each comment next to its code, one at a time. Reopen any time with /review read ${String(reviewId)}.`,
+        description: `Read each comment next to its code, one at a time. Reopen any time with /review read ${handle}.`,
       },
       {
         value: 'export',
         label: 'Export to Markdown',
-        description: `Save all the comments to a Markdown file. Or run /review export ${String(reviewId)} yourself.`,
+        description: `Save all the comments to a Markdown file. Or run /review export ${handle} yourself.`,
       },
       {
         value: 'chat',
@@ -195,7 +232,11 @@ async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult)
   });
   if (choice === 'browse') {
     const artifact = await host.requireSession().readReview(reviewId);
-    if (artifact !== undefined) openReviewReader(host, artifact);
+    if (artifact === undefined) {
+      host.showError(`Review ${String(reviewId)} could not be opened.`);
+      return;
+    }
+    openReviewReader(host, artifact);
   } else if (choice === 'export') {
     await handleReviewExport(host, String(reviewId));
   }
@@ -315,8 +356,9 @@ async function startReview(
     : host.showProgressSpinner('Reviewing changes…');
   host.setReviewActive(true);
   host.state.reviewResultPending = true;
+  let result: ReviewResult | undefined;
   try {
-    const result = await host.requireSession().startReview(input);
+    result = await host.requireSession().startReview(input);
     host.setReviewActive(false);
     const complete = result.status === 'complete';
     spinner?.stop({
@@ -329,24 +371,25 @@ async function startReview(
       renderMode: 'markdown',
       content: formatReviewCompactMarkdown(result),
     });
-    await offerReviewFollowUp(host, result);
   } catch (error) {
     const message = formatErrorMessage(error);
     const reviewEventHandled = host.state.reviewActive === false;
     host.setReviewActive(false);
     if (message.toLowerCase().includes('aborted')) {
       spinner?.stop({ ok: false, label: 'Review cancelled.' });
-      return;
-    }
-    if (reviewEventHandled) {
+    } else if (reviewEventHandled) {
       spinner?.stop({ ok: false, label: 'Review stopped.' });
-      return;
+    } else {
+      spinner?.stop({ ok: false, label: `Review stopped: ${message}` });
+      host.showError(`Review stopped: ${message}`);
     }
-    spinner?.stop({ ok: false, label: `Review stopped: ${message}` });
-    host.showError(`Review stopped: ${message}`);
   } finally {
     host.state.reviewResultPending = false;
   }
+
+  // The follow-up runs outside the try/catch so its errors are never
+  // misreported as review failures.
+  if (result !== undefined) await offerReviewFollowUp(host, result);
 }
 
 function promptChoice(

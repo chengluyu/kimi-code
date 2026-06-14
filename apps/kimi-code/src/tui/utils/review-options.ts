@@ -121,12 +121,17 @@ interface CompactComment {
   readonly rejected: boolean;
 }
 
+/** Escape Markdown control characters in a dynamic value before interpolation. */
+export function escapeMarkdown(text: string): string {
+  return text.replace(/([\\`*_~#[\]<>])/g, '\\$1');
+}
+
 /** Compact transcript render for a freshly completed review. */
 export function formatReviewCompactMarkdown(result: ReviewResult): string {
   return renderCompactReview({
     summary: result.summary,
     stats: result.stats,
-    reviewId: result.reviewId,
+    handle: result.reviewSlug ?? (result.reviewId === undefined ? undefined : String(result.reviewId)),
     comments: result.comments.map((comment) => ({
       severity: comment.severity,
       path: comment.path,
@@ -142,7 +147,7 @@ export function formatReviewArtifactCompactMarkdown(artifact: ReviewArtifact): s
   return renderCompactReview({
     summary: artifact.summary,
     stats: artifact.stats,
-    reviewId: artifact.id,
+    handle: artifact.slug,
     comments: artifact.comments.map((comment) => ({
       severity: comment.severity,
       path: comment.anchor.path,
@@ -153,9 +158,9 @@ export function formatReviewArtifactCompactMarkdown(artifact: ReviewArtifact): s
   });
 }
 
-/** Full grouped-by-severity Markdown for `/review export`. */
+/** Full grouped-by-severity Markdown for `/review export`. All dynamic values escaped. */
 export function formatReviewArtifactMarkdown(artifact: ReviewArtifact): string {
-  const lines = [`# Code review ${String(artifact.id)}`, '', artifact.summary, ''];
+  const lines = [`# Code review: ${escapeMarkdown(artifact.slug)}`, '', escapeMarkdown(artifact.summary), ''];
   for (const severity of SEVERITY_ORDER) {
     const group = artifact.comments.filter(
       (comment) => comment.severity === severity && comment.state !== 'dismissed',
@@ -163,11 +168,11 @@ export function formatReviewArtifactMarkdown(artifact: ReviewArtifact): string {
     if (group.length === 0) continue;
     lines.push(`## ${severityLabel(severity)}`, '');
     for (const comment of group) {
-      lines.push(`### ${comment.title}`);
+      lines.push(`### ${escapeMarkdown(comment.title)}`);
       lines.push(`\`${comment.anchor.path}:${String(comment.anchor.line)}\``, '');
-      if (comment.body.length > 0) lines.push(comment.body, '');
+      if (comment.body.length > 0) lines.push(escapeMarkdown(comment.body), '');
       if (comment.suggestedFix !== undefined && comment.suggestedFix.length > 0) {
-        lines.push(`**Suggested fix:** ${comment.suggestedFix}`, '');
+        lines.push(`**Suggested fix:** ${escapeMarkdown(comment.suggestedFix)}`, '');
       }
     }
   }
@@ -175,7 +180,7 @@ export function formatReviewArtifactMarkdown(artifact: ReviewArtifact): string {
   if (rejected.length > 0) {
     lines.push('## Rejected', '');
     for (const comment of rejected) {
-      lines.push(`- ~~\`${comment.anchor.path}:${String(comment.anchor.line)}\` — ${comment.title}~~`);
+      lines.push(`- ~~${escapeMarkdown(`${comment.anchor.path}:${String(comment.anchor.line)} — ${comment.title}`)}~~`);
     }
     lines.push('');
   }
@@ -196,7 +201,7 @@ export function reviewScopeLabel(scope: ReviewArtifact['target']['scope']): stri
 function renderCompactReview(input: {
   readonly summary: string;
   readonly stats: ReviewDiffStats;
-  readonly reviewId: number | undefined;
+  readonly handle: string | undefined;
   readonly comments: readonly CompactComment[];
 }): string {
   const active = input.comments.filter((comment) => !comment.rejected);
@@ -225,8 +230,8 @@ function renderCompactReview(input: {
     }
     lines.push('');
   }
-  if (input.reviewId !== undefined) {
-    lines.push(`Browse or reject findings: \`/review read ${String(input.reviewId)}\``);
+  if (input.handle !== undefined) {
+    lines.push(`Browse or reject findings: \`/review read ${input.handle}\``);
   }
   return lines.join('\n').trimEnd();
 }
