@@ -50,41 +50,43 @@ export function formatReviewToolLabel(
 ): ReviewToolLabel | undefined {
   switch (toolName) {
     case 'GetAssignment':
-      return label('review assignment');
+      return label('Loaded review assignment');
     case 'GetChangedFiles':
-      return label('changed files', changedFilesDetail(args, display));
+      return label('Listed changed files', changedFilesDetail(args, display));
     case 'ReadPatch':
-      return label(summaryWithPath('review patch', stringArg(args, 'path')), readPatchDetail(args, display));
+      return label(readPatchSummary(args), readPatchDetail(args, display));
     case 'ReadFileVersion':
       return label(
-        summaryWithPath('file version', stringArg(args, 'path')),
+        readFileVersionSummary(args),
         readFileVersionDetail(args, display),
       );
     case 'UpdateProgress': {
       const status = stringArg(args, 'status');
-      return label(
-        status === undefined ? 'review progress update' : `review progress update: ${status}`,
-        progressUpdateDetail(args, display),
-      );
+      return label(progressUpdateSummary(status), progressUpdateDetail(args, display));
     }
     case 'AddComment':
       return label(
-        summaryWithPathLine('review comment', stringArg(args, 'path'), numberArg(args, 'line')),
-        joinDetails([stringArg(args, 'severity'), stringArg(args, 'title')]) ?? displayDetail(display),
+        'Added review comment',
+        joinDetails([
+          pathLineDetail(stringArg(args, 'path'), numberArg(args, 'line')),
+          stringArg(args, 'severity'),
+          stringArg(args, 'title'),
+        ]) ?? displayDetail(display),
       );
     case 'GetComments':
-      return label('review comments', commentsDetail(args, display));
+      return label('Listed review comments', commentsDetail(args, display));
     case 'GetCommentEvidence':
-      return label(summaryWithPath('comment evidence', stringArg(args, 'comment_id')));
+      return label('Read comment evidence', stringArg(args, 'comment_id'));
     case 'MergeComments':
       return label(
-        summaryWithPathLine('comment merge', stringArg(args, 'path'), numberArg(args, 'line')),
+        'Merged review comments',
         mergeDetail(args, display),
       );
     case 'DismissComment':
       return label(
-        summaryWithPath('comment dismissal', stringArg(args, 'comment_id')),
+        'Dismissed review comment',
         joinDetails([
+          stringArg(args, 'comment_id'),
           stringArg(args, 'reason'),
           stringArg(args, 'summary'),
           prefixed('merged into', stringArg(args, 'merged_comment_id')),
@@ -98,21 +100,6 @@ export function formatReviewToolLabel(
 function label(summary: string, detail?: string): ReviewToolLabel {
   if (detail !== undefined && detail.length > 0) return { summary, detail };
   return { summary };
-}
-
-function summaryWithPath(prefix: string, path: string | undefined): string {
-  if (path === undefined || path.length === 0) return prefix;
-  return `${prefix}: ${path}`;
-}
-
-function summaryWithPathLine(
-  prefix: string,
-  path: string | undefined,
-  line: number | undefined,
-): string {
-  if (path === undefined || path.length === 0) return prefix;
-  if (line === undefined) return `${prefix}: ${path}`;
-  return `${prefix}: ${path}:${String(line)}`;
 }
 
 function changedFilesDetail(
@@ -138,6 +125,7 @@ function readPatchDetail(
   if (!hasPatchArgs) return displayDetail(display);
   const contextLines = numberArg(args, 'context_lines') ?? 3;
   return joinDetails([
+    stringArg(args, 'path'),
     stringArg(args, 'hunk_id') === undefined ? 'all hunks' : `hunk ${stringArg(args, 'hunk_id')}`,
     countLabel(contextLines, 'context line', 'context lines'),
   ]);
@@ -155,10 +143,12 @@ function readFileVersionDetail(
     numberArg(args, 'n_lines') !== undefined;
   if (!hasFileArgs) return displayDetail(display);
   const ref = stringArg(args, 'ref');
-  const source = ref === undefined
-    ? stringArg(args, 'version') ?? 'current'
-    : `ref ${formatReviewRefForLabel(ref)}`;
-  return joinDetails([source, lineRangeLabel(numberArg(args, 'line_offset'), numberArg(args, 'n_lines'))]);
+  const source = ref === undefined ? undefined : `ref ${formatReviewRefForLabel(ref)}`;
+  return joinDetails([
+    stringArg(args, 'path'),
+    source,
+    lineRangeLabel(numberArg(args, 'line_offset'), numberArg(args, 'n_lines')),
+  ]);
 }
 
 function commentsDetail(
@@ -181,10 +171,46 @@ function mergeDetail(
 ): string | undefined {
   const sources = stringArrayArg(args, 'source_comment_ids');
   return joinDetails([
+    pathLineDetail(stringArg(args, 'path'), numberArg(args, 'line')),
     sources === undefined ? undefined : countLabel(sources.length, 'source comment', 'source comments'),
     stringArg(args, 'severity'),
     stringArg(args, 'title'),
   ]) ?? displayDetail(display);
+}
+
+function readPatchSummary(args: Record<string, unknown>): string {
+  return stringArg(args, 'hunk_id') === undefined ? 'Read review patch' : 'Read review patch hunk';
+}
+
+function readFileVersionSummary(args: Record<string, unknown>): string {
+  const ref = stringArg(args, 'ref');
+  if (ref !== undefined) return 'Read file at ref';
+  switch (stringArg(args, 'version')) {
+    case 'base':
+      return 'Read base file state';
+    case 'head':
+      return 'Read HEAD file state';
+    case 'current':
+    case undefined:
+      return 'Read current file state';
+    default:
+      return 'Read file state';
+  }
+}
+
+function progressUpdateSummary(status: string | undefined): string {
+  switch (status) {
+    case 'complete':
+      return 'Marked review complete';
+    case 'blocked':
+      return 'Marked review blocked';
+    case 'active':
+      return 'Updated review progress';
+    case undefined:
+      return 'Updated review progress';
+    default:
+      return `Updated review progress: ${status}`;
+  }
 }
 
 function progressUpdateDetail(
@@ -233,6 +259,12 @@ function joinDetails(parts: readonly (string | undefined)[]): string | undefined
 
 function prefixed(prefix: string, value: string | undefined): string | undefined {
   return value === undefined ? undefined : `${prefix}: ${value}`;
+}
+
+function pathLineDetail(path: string | undefined, line: number | undefined): string | undefined {
+  if (path === undefined || path.length === 0) return undefined;
+  if (line === undefined) return path;
+  return `${path}:${String(line)}`;
 }
 
 function formatReviewRefForLabel(ref: string): string {

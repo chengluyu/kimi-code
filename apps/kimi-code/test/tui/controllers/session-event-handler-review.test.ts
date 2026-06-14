@@ -36,6 +36,9 @@ function makeHost() {
     },
     requireSession: vi.fn(() => ({})),
     setAppState: vi.fn(),
+    setReviewActive: vi.fn((active: boolean) => {
+      host.state.reviewActive = active;
+    }),
     patchLivePane: vi.fn(),
     resetLivePane: vi.fn(),
     showError: vi.fn(),

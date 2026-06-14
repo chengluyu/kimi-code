@@ -83,6 +83,7 @@ interface SubToolActivity {
  * `latestActivity` priority, used only while running:
  *   1. latest ongoing sub-tool (`Using {name} ({keyArg})`)
  *   2. latest finished sub-tool (`Used {name} ({keyArg})`)
+ *      Review tools provide complete activity phrases without this generic verb.
  *   3. last non-empty line from accumulated subagent text
  */
 export interface ToolCallSubagentSnapshot {
@@ -1361,7 +1362,8 @@ export class ToolCallComponent extends Container {
     if (isFinished && result) chipStr = this.buildHeaderChip(result);
     const reviewActivity = styledReviewActivity(toolCall.name, toolCall.args, toolCall.display);
     if (reviewActivity !== undefined) {
-      return `${bullet}${verbStyled} ${reviewActivity}${chipStr}`;
+      const prefix = isTruncated ? `${verbStyled} ` : '';
+      return `${bullet}${prefix}${reviewActivity}${chipStr}`;
     }
 
     const keyArg = extractKeyArgument(toolCall.name, toolCall.args, this.workspaceDir);
@@ -1494,7 +1496,7 @@ export class ToolCallComponent extends Container {
         : currentTheme.fg('success', '•');
       const reviewActivity = styledReviewActivity(sub.name, sub.args, sub.display);
       if (reviewActivity !== undefined) {
-        this.addChild(new Text(`    ${mark} Used ${reviewActivity}`, 0, 0));
+        this.addChild(new Text(`    ${mark} ${reviewActivity}`, 0, 0));
       } else {
         const keyArg = extractKeyArgument(sub.name, sub.args, this.workspaceDir);
         const nameCol = currentTheme.fg('primary', sub.name);
@@ -1507,7 +1509,7 @@ export class ToolCallComponent extends Container {
       const reviewActivity = styledReviewActivity(call.name, call.args, call.display);
       void id;
       if (reviewActivity !== undefined) {
-        this.addChild(new Text(`    ${currentTheme.dim('…')} Using ${reviewActivity}`, 0, 0));
+        this.addChild(new Text(`    ${currentTheme.dim('…')} ${reviewActivity}`, 0, 0));
       } else {
         const keyArg = extractKeyArgument(call.name, call.args, this.workspaceDir);
         const nameCol = currentTheme.fg('primary', call.name);
@@ -1758,7 +1760,7 @@ export class ToolCallComponent extends Container {
 
   private formatSubToolActivity(verb: string, activity: SubToolActivity): string {
     const reviewActivity = styledReviewActivity(activity.name, activity.args, activity.display);
-    if (reviewActivity !== undefined) return `${verb} ${reviewActivity}`;
+    if (reviewActivity !== undefined) return reviewActivity;
 
     const keyArg = extractKeyArgument(activity.name, activity.args, this.workspaceDir);
     const nameCol = currentTheme.fg('primary', activity.name);
@@ -2088,6 +2090,7 @@ export class ToolCallComponent extends Container {
  * Computes the second-level "latest activity" line for group rows:
  *   1. latest ongoing sub-tool (`Using {name} ({keyArg})`)
  *   2. latest finished sub-tool (`Used {name} ({keyArg})`)
+ *      Review tools provide complete activity phrases without this generic verb.
  *   3. last non-empty line from accumulated subagent text
  */
 function computeLatestActivity(
@@ -2138,7 +2141,7 @@ function formatActivityLine(
   display?: ToolInputDisplay | undefined,
 ): string {
   const reviewActivity = plainReviewActivity(toolName, args, display);
-  if (reviewActivity !== undefined) return `${verb} ${reviewActivity}`;
+  if (reviewActivity !== undefined) return reviewActivity;
 
   const keyArg = extractKeyArgument(toolName, args, workspaceDir);
   return keyArg ? `${verb} ${toolName} (${keyArg})` : `${verb} ${toolName}`;

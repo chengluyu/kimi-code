@@ -44,6 +44,7 @@ import { BannerComponent } from './components/chrome/banner';
 import { DeviceCodeBoxComponent } from './components/chrome/device-code-box';
 import { GutterContainer } from './components/chrome/gutter-container';
 import { MoonLoader, type SpinnerStyle } from './components/chrome/moon-loader';
+import { ReviewStatusComponent } from './components/chrome/review-status';
 import { WelcomeComponent } from './components/chrome/welcome';
 import {
   ApprovalPanelComponent,
@@ -709,6 +710,7 @@ export class KimiTUI {
     ui.addChild(this.state.activityContainer);
     ui.addChild(this.state.todoPanelContainer);
     ui.addChild(this.state.queueContainer);
+    ui.addChild(this.state.reviewStatusContainer);
     ui.addChild(this.state.btwPanelContainer);
     ui.addChild(this.state.editorContainer);
     // Footer is mounted later (mountFooter), not here.
@@ -1028,6 +1030,20 @@ export class KimiTUI {
       this.sessionEventHandler.retryQueuedGoalPromotion();
     }
     this.state.ui.requestRender();
+  }
+
+  setReviewActive(active: boolean): void {
+    if (this.state.reviewActive === active) return;
+    this.state.reviewActive = active;
+    this.updateReviewStatusDisplay();
+    this.state.ui.requestRender();
+  }
+
+  private updateReviewStatusDisplay(): void {
+    this.state.reviewStatusContainer.clear();
+    if (this.state.reviewActive) {
+      this.state.reviewStatusContainer.addChild(new ReviewStatusComponent());
+    }
   }
 
   patchLivePane(patch: Partial<LivePaneState>): void {

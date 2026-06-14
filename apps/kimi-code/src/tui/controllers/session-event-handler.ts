@@ -108,6 +108,7 @@ export interface SessionEventHost {
 
   requireSession(): Session;
   setAppState(patch: Partial<AppState>): void;
+  setReviewActive(active: boolean): void;
   patchLivePane(patch: Partial<LivePaneState>): void;
   resetLivePane(): void;
   showError(msg: string): void;
@@ -179,7 +180,7 @@ export class SessionEventHandler {
     this.pendingModelBlockedFallback = undefined;
     this.queuedGoalPromotionPending = false;
     this.queuedGoalPromotionInFlight = false;
-    this.host.state.reviewActive = false;
+    this.host.setReviewActive(false);
     this.host.state.reviewResultPending = false;
     this.clearQueuedGoalPromotionTimer();
     this.stopAllMcpServerStatusSpinners();
@@ -355,7 +356,7 @@ export class SessionEventHandler {
   }
 
   private handleReviewStarted(event: ReviewStartedEvent): void {
-    this.host.state.reviewActive = true;
+    this.host.setReviewActive(true);
     this.activeReviewIntensity = event.intensity;
     if (event.agentSwarm !== undefined) {
       this.reviewAgentSwarmToolCallId = event.agentSwarm.toolCallId;
@@ -485,7 +486,7 @@ export class SessionEventHandler {
 
   private handleReviewCompleted(event: ReviewCompletedEvent): void {
     const commandOwnsFinalReviewResult = this.host.state.reviewResultPending;
-    this.host.state.reviewActive = false;
+    this.host.setReviewActive(false);
     this.finishReviewAgentSwarm('', false);
     this.reviewAgentSwarmReviewerAssignmentIds.clear();
     this.activeReviewIntensity = undefined;
@@ -500,7 +501,7 @@ export class SessionEventHandler {
   }
 
   private handleReviewCancelled(_event: ReviewCancelledEvent): void {
-    this.host.state.reviewActive = false;
+    this.host.setReviewActive(false);
     this.markActiveAgentSwarmsCancelled();
     this.reviewAgentSwarmToolCallId = undefined;
     this.reviewAgentSwarmReviewerAssignmentIds.clear();
@@ -514,7 +515,7 @@ export class SessionEventHandler {
   }
 
   private handleReviewFailed(event: ReviewFailedEvent): void {
-    this.host.state.reviewActive = false;
+    this.host.setReviewActive(false);
     this.finishReviewAgentSwarm(event.message, true);
     this.reviewAgentSwarmReviewerAssignmentIds.clear();
     this.activeReviewIntensity = undefined;

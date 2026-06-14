@@ -186,11 +186,11 @@ async function startReview(
   const spinner = input.intensity === 'deep'
     ? undefined
     : host.showProgressSpinner('Reviewing changes…');
-  host.state.reviewActive = true;
+  host.setReviewActive(true);
   host.state.reviewResultPending = true;
   try {
     const result = await host.requireSession().startReview(input);
-    host.state.reviewActive = false;
+    host.setReviewActive(false);
     const complete = result.status === 'complete';
     spinner?.stop({
       ok: complete,
@@ -205,7 +205,7 @@ async function startReview(
   } catch (error) {
     const message = formatErrorMessage(error);
     const reviewEventHandled = host.state.reviewActive === false;
-    host.state.reviewActive = false;
+    host.setReviewActive(false);
     if (message.toLowerCase().includes('aborted')) {
       spinner?.stop({ ok: false, label: 'Review cancelled.' });
       return;

@@ -112,6 +112,7 @@ export interface SlashCommandHost {
   deferUserMessages: boolean;
 
   setAppState(patch: Partial<AppState>): void;
+  setReviewActive(active: boolean): void;
   resetLivePane(): void;
   showError(msg: string): void;
   showStatus(msg: string, color?: ColorToken): void;

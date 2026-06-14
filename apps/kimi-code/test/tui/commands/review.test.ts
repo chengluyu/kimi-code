@@ -159,6 +159,9 @@ function makeHost(input: {
     showTransientStatus: vi.fn(() => ({ clear: transientStatusClear })),
     showNotice: vi.fn(),
     appendTranscriptEntry: vi.fn(),
+    setReviewActive: vi.fn((active: boolean) => {
+      host.state.reviewActive = active;
+    }),
     mountEditorReplacement,
     restoreEditor,
     showProgressSpinner: vi.fn(() => ({ stop: spinnerStop })),

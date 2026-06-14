@@ -3,6 +3,49 @@ import { describe, expect, it } from 'vitest';
 import { formatReviewToolActivityLabel } from '#/tui/components/messages/tool-renderers/review';
 
 describe('review tool activity labels', () => {
+  it('specializes file-version reads by source without highlighting paths as the action', () => {
+    expect(formatReviewToolActivityLabel('ReadFileVersion', {
+      path: 'packages/agent-core/src/review/prompts.ts',
+      version: 'current',
+      line_offset: 1,
+    })).toBe(
+      'Read current file state (packages/agent-core/src/review/prompts.ts · from line 1)',
+    );
+
+    expect(formatReviewToolActivityLabel('ReadFileVersion', {
+      path: 'packages/agent-core/src/review/prompts.ts',
+      version: 'base',
+      line_offset: 40,
+      n_lines: 8,
+    })).toBe(
+      'Read base file state (packages/agent-core/src/review/prompts.ts · lines 40-47)',
+    );
+
+    expect(formatReviewToolActivityLabel('ReadFileVersion', {
+      path: 'packages/agent-core/src/review/prompts.ts',
+      ref: 'a58b5b20bb42228c72277daba9fa07bb1cd539a6',
+      line_offset: 7,
+      n_lines: 1,
+    })).toBe(
+      'Read file at ref (packages/agent-core/src/review/prompts.ts · ref a58b5b2 · line 7)',
+    );
+  });
+
+  it('keeps review paths in the detail segment for patch and comment tools', () => {
+    expect(formatReviewToolActivityLabel('ReadPatch', {
+      path: 'src/a.ts',
+      hunk_id: '2',
+      context_lines: 5,
+    })).toBe('Read review patch hunk (src/a.ts · hunk 2 · 5 context lines)');
+
+    expect(formatReviewToolActivityLabel('AddComment', {
+      path: 'src/a.ts',
+      line: 12,
+      severity: 'important',
+      title: 'Validate input',
+    })).toBe('Added review comment (src/a.ts:12 · important · Validate input)');
+  });
+
   it('does not inline multi-line UpdateProgress summaries', () => {
     const label = formatReviewToolActivityLabel('UpdateProgress', {
       status: 'complete',
@@ -15,7 +58,7 @@ describe('review tool activity labels', () => {
       ].join('\n'),
     });
 
-    expect(label).toBe('review progress update: complete (summary recorded)');
+    expect(label).toBe('Marked review complete (summary recorded)');
   });
 
   it('does not inline multi-line UpdateProgress blockers', () => {
@@ -24,6 +67,6 @@ describe('review tool activity labels', () => {
       blocker: 'Cannot continue until the missing file can be read.\nTool returned 429.',
     });
 
-    expect(label).toBe('review progress update: blocked (blocker recorded)');
+    expect(label).toBe('Marked review blocked (blocker recorded)');
   });
 });

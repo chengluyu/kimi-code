@@ -147,6 +147,74 @@ describe('ToolCallComponent', () => {
     expect(expanded).not.toContain('task tools');
   });
 
+  it('renders review tool calls as complete actions without a generic Used prefix', () => {
+    const component = new ToolCallComponent(
+      {
+        id: 'call_review_read',
+        name: 'ReadFileVersion',
+        args: {
+          path: 'packages/agent-core/src/review/prompts.ts',
+          version: 'current',
+          line_offset: 1,
+        },
+      },
+      {
+        tool_call_id: 'call_review_read',
+        output: 'content',
+        is_error: false,
+      },
+    );
+
+    const out = strip(component.render(120).join('\n'));
+
+    expect(out).toContain('Read current file state (packages/agent-core/src/review/prompts.ts · from line 1)');
+    expect(out).not.toContain('Used file version');
+    expect(out).not.toContain('Used ReadFileVersion');
+    expect(out).not.toContain('Used Read current file state');
+  });
+
+  it('renders review subagent tool activity without a generic Used prefix', () => {
+    const component = new ToolCallComponent(
+      {
+        id: 'call_agent_review',
+        name: 'Agent',
+        args: { description: 'Review changes' },
+      },
+      undefined,
+      stubTui(24),
+    );
+    component.onSubagentSpawned({
+      agentId: 'agent-review-1',
+      agentName: 'reviewer',
+      runInBackground: false,
+    });
+    component.onSubagentStarted({
+      agentId: 'agent-review-1',
+      agentName: 'reviewer',
+      runInBackground: false,
+    });
+    component.appendSubToolCall({
+      id: 'sub_read_current',
+      name: 'ReadFileVersion',
+      args: {
+        path: 'packages/agent-core/src/review/prompts.ts',
+        version: 'current',
+        line_offset: 1,
+      },
+    });
+    component.finishSubToolCall({
+      tool_call_id: 'sub_read_current',
+      output: 'content',
+      is_error: false,
+    });
+
+    const out = strip(component.render(120).join('\n'));
+
+    expect(out).toContain('Read current file state (packages/agent-core/src/review/prompts.ts · from line 1)');
+    expect(out).not.toContain('Used file version');
+    expect(out).not.toContain('Used Read current file state');
+  });
+
   it('hides <system-prefixed output even when the tool result is an error', () => {
     const component = new ToolCallComponent(
       {
@@ -771,7 +839,7 @@ describe('ToolCallComponent', () => {
 
     const out = strip(component.render(120).join('\n'));
 
-    expect(out).toContain('Using review patch: src/a.ts (hunk hunk-2 · 5 context lines)');
+    expect(out).toContain('Read review patch hunk (src/a.ts · hunk hunk-2 · 5 context lines)');
     expect(out).not.toContain('Using ReadPatch');
     expect(out).not.toContain('hunk_id');
     expect(out).not.toContain('context_lines');
@@ -799,9 +867,9 @@ describe('ToolCallComponent', () => {
     const out = strip(component.render(120).join('\n'));
     const symbolicOut = strip(symbolic.render(120).join('\n'));
 
-    expect(out).toContain('Using file version: AGENTS.md (ref 3980a55 · from line 1)');
+    expect(out).toContain('Read file at ref (AGENTS.md · ref 3980a55 · from line 1)');
     expect(out).not.toContain(fullRef);
-    expect(symbolicOut).toContain('Using file version: AGENTS.md (ref origin/main · from line 1)');
+    expect(symbolicOut).toContain('Read file at ref (AGENTS.md · ref origin/main · from line 1)');
   });
 
   it('renders a single foreground subagent without the generic Agent tool header', () => {
@@ -896,7 +964,7 @@ describe('ToolCallComponent', () => {
 
     const out = strip(component.render(120).join('\n'));
 
-    expect(out).toContain('Using review patch: src/a.ts (hunk hunk-2 · 5 context lines)');
+    expect(out).toContain('Read review patch hunk (src/a.ts · hunk hunk-2 · 5 context lines)');
     expect(out).not.toContain('Using ReadPatch');
     expect(out).not.toContain('hunk_id');
   });
@@ -925,7 +993,7 @@ describe('ToolCallComponent', () => {
     });
 
     let out = strip(component.render(120).join('\n'));
-    expect(out).toContain('Using review patch: src/a.ts (hunk hunk-2 · 5 context lines)');
+    expect(out).toContain('Read review patch hunk (src/a.ts · hunk hunk-2 · 5 context lines)');
     expect(out).not.toContain('Using ReadPatch');
 
     component.finishSubToolCall({
@@ -935,7 +1003,7 @@ describe('ToolCallComponent', () => {
     });
 
     out = strip(component.render(120).join('\n'));
-    expect(out).toContain('Used review patch: src/a.ts (hunk hunk-2 · 5 context lines)');
+    expect(out).toContain('Read review patch hunk (src/a.ts · hunk hunk-2 · 5 context lines)');
     expect(out).not.toContain('Used ReadPatch');
   });
 
@@ -977,7 +1045,7 @@ describe('ToolCallComponent', () => {
 
     const out = strip(component.render(120).join('\n'));
 
-    expect(out).toContain('Used review assignment');
+    expect(out).toContain('Loaded review assignment');
     expect(out).not.toContain('"id"');
     expect(out).not.toContain('"role"');
     expect(out).not.toContain('review-assignment-1');
