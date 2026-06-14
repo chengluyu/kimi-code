@@ -70,6 +70,9 @@ import type {
   PluginSummary,
   PreviewReviewPlanPayload,
   PreviewReviewTargetPayload,
+  ReadReviewPayload,
+  RejectReviewCommentPayload,
+  RestoreReviewCommentPayload,
   PromptPayload,
   ReconnectMcpServerPayload,
   RegisterToolPayload,
@@ -706,6 +709,22 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
 
   cancelReview({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>): void {
     return this.sessionApi(sessionId).cancelReview(payload);
+  }
+
+  listReviews({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>) {
+    return this.sessionApi(sessionId).listReviews(payload);
+  }
+
+  readReview({ sessionId, ...payload }: SessionScopedPayload<ReadReviewPayload>) {
+    return this.sessionApi(sessionId).readReview(payload);
+  }
+
+  rejectReviewComment({ sessionId, ...payload }: SessionScopedPayload<RejectReviewCommentPayload>) {
+    return this.sessionApi(sessionId).rejectReviewComment(payload);
+  }
+
+  restoreReviewComment({ sessionId, ...payload }: SessionScopedPayload<RestoreReviewCommentPayload>) {
+    return this.sessionApi(sessionId).restoreReviewComment(payload);
   }
 
   startBtw({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>): Promise<string> {

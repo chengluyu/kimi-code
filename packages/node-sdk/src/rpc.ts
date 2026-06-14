@@ -48,6 +48,8 @@ import type {
   RenameSessionInput,
   ResumeSessionInput,
   ResumedSessionSummary,
+  ReviewArtifact,
+  ReviewArtifactSummary,
   ReviewBaseRef,
   ReviewCommit,
   ReviewPlanPreview,
@@ -501,6 +503,39 @@ export abstract class SDKRpcClientBase {
   async cancelReview(input: SessionIdRpcInput): Promise<void> {
     const rpc = await this.getRpc();
     return rpc.cancelReview({ sessionId: input.sessionId });
+  }
+
+  async listReviews(input: SessionIdRpcInput): Promise<readonly ReviewArtifactSummary[]> {
+    const rpc = await this.getRpc();
+    return rpc.listReviews({ sessionId: input.sessionId });
+  }
+
+  async readReview(input: SessionIdRpcInput & { id: number }): Promise<ReviewArtifact | undefined> {
+    const rpc = await this.getRpc();
+    return rpc.readReview({ sessionId: input.sessionId, id: input.id });
+  }
+
+  async rejectReviewComment(
+    input: SessionIdRpcInput & { id: number; commentId: string; note?: string },
+  ): Promise<ReviewArtifact | undefined> {
+    const rpc = await this.getRpc();
+    return rpc.rejectReviewComment({
+      sessionId: input.sessionId,
+      id: input.id,
+      commentId: input.commentId,
+      note: input.note,
+    });
+  }
+
+  async restoreReviewComment(
+    input: SessionIdRpcInput & { id: number; commentId: string },
+  ): Promise<ReviewArtifact | undefined> {
+    const rpc = await this.getRpc();
+    return rpc.restoreReviewComment({
+      sessionId: input.sessionId,
+      id: input.id,
+      commentId: input.commentId,
+    });
   }
 
   async listBackgroundTasks(

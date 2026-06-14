@@ -76,6 +76,7 @@ describe('Event public types', () => {
         case 'review.comment.added':
         case 'review.comment.merged':
         case 'review.comment.dismissed':
+        case 'review.comment.rejected':
         case 'review.completed':
         case 'review.cancelled':
         case 'review.failed':

@@ -416,6 +416,17 @@ export interface ReviewCompletedEvent {
   readonly status: 'complete' | 'blocked';
   readonly summary: string;
   readonly comments: readonly ReviewEventComment[];
+  /** Short ordinal of the persisted review artifact, when one was saved. */
+  readonly reviewId?: number;
+}
+
+/** Emitted when the user rejects a persisted review comment from the browser. */
+export interface ReviewCommentRejectedEvent {
+  readonly type: 'review.comment.rejected';
+  readonly reviewId: number;
+  readonly commentId: string;
+  readonly rejected: boolean;
+  readonly note?: string;
 }
 
 export interface ReviewCancelledEvent {
@@ -680,6 +691,7 @@ export type AgentEvent =
   | ReviewCommentAddedEvent
   | ReviewCommentMergedEvent
   | ReviewCommentDismissedEvent
+  | ReviewCommentRejectedEvent
   | ReviewCompletedEvent
   | ReviewCancelledEvent
   | ReviewFailedEvent

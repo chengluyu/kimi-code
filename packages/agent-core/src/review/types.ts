@@ -202,4 +202,6 @@ export interface ReviewResult {
   readonly stats: ReviewDiffStats;
   readonly summary: string;
   readonly comments: readonly ReviewFinalComment[];
+  /** Short ordinal of the persisted artifact, set once the review is saved. */
+  readonly reviewId?: number;
 }

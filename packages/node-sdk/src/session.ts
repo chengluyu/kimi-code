@@ -23,6 +23,8 @@ import type {
   ReloadSummary,
   ResumedSessionState,
   ResumedSessionSummary,
+  ReviewArtifact,
+  ReviewArtifactSummary,
   ReviewBaseRef,
   ReviewCommit,
   ReviewPlanPreview,
@@ -279,6 +281,30 @@ export class Session {
   async cancelReview(): Promise<void> {
     this.ensureOpen();
     await this.rpc.cancelReview({ sessionId: this.id });
+  }
+
+  async listReviews(): Promise<readonly ReviewArtifactSummary[]> {
+    this.ensureOpen();
+    return this.rpc.listReviews({ sessionId: this.id });
+  }
+
+  async readReview(id: number): Promise<ReviewArtifact | undefined> {
+    this.ensureOpen();
+    return this.rpc.readReview({ sessionId: this.id, id });
+  }
+
+  async rejectReviewComment(
+    id: number,
+    commentId: string,
+    note?: string,
+  ): Promise<ReviewArtifact | undefined> {
+    this.ensureOpen();
+    return this.rpc.rejectReviewComment({ sessionId: this.id, id, commentId, note });
+  }
+
+  async restoreReviewComment(id: number, commentId: string): Promise<ReviewArtifact | undefined> {
+    this.ensureOpen();
+    return this.rpc.restoreReviewComment({ sessionId: this.id, id, commentId });
   }
 
   /**

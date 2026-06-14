@@ -15,9 +15,12 @@ import type {
   PreviewReviewPlanPayload,
   PreviewReviewTargetPayload,
   PromptPayload,
+  ReadReviewPayload,
   ReconnectMcpServerPayload,
+  RejectReviewCommentPayload,
   RenameSessionPayload,
   RegisterToolPayload,
+  RestoreReviewCommentPayload,
   SessionAPI,
   SetActiveToolsPayload,
   SetModelPayload,
@@ -119,6 +122,22 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   cancelReview(_payload: EmptyPayload): void {
     this.session.cancelReview();
+  }
+
+  listReviews(_payload: EmptyPayload) {
+    return this.session.listReviews();
+  }
+
+  readReview(payload: ReadReviewPayload) {
+    return this.session.readReview(payload.id);
+  }
+
+  rejectReviewComment(payload: RejectReviewCommentPayload) {
+    return this.session.rejectReviewComment(payload.id, payload.commentId, payload.note);
+  }
+
+  restoreReviewComment(payload: RestoreReviewCommentPayload) {
+    return this.session.restoreReviewComment(payload.id, payload.commentId);
   }
 
 

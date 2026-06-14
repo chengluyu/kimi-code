@@ -25,6 +25,7 @@ export type {
   ReviewCommentAddedEvent,
   ReviewCommentDismissedEvent,
   ReviewCommentMergedEvent,
+  ReviewCommentRejectedEvent,
   ReviewCompletedEvent,
   ReviewEventAssignment,
   ReviewEventComment,

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorCodes } from '../../src/errors';
 import { FlagResolver } from '../../src/flags';
+import { buildReviewArtifact, ReviewArtifactStore } from '../../src/review';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { Session } from '../../src/session';
 import { testKaos } from '../fixtures/test-kaos';
@@ -74,6 +75,65 @@ describe('Session review lifecycle', () => {
 
       resumeGate.reject(new Error('stop first review'));
       await first;
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('lists, reads, rejects, and restores persisted review artifacts', async () => {
+    const sessionDir = await makeTempDir();
+    const rpc = createSessionRpc();
+    const session = new Session({
+      id: 'test-review-session',
+      kaos: testKaos.withCwd(sessionDir),
+      homedir: sessionDir,
+      rpc,
+      experimentalFlags: new FlagResolver({ KIMI_CODE_EXPERIMENTAL_CODE_REVIEW: '1' }),
+    });
+    try {
+      const store = new ReviewArtifactStore(testKaos.withCwd(sessionDir), sessionDir);
+      const saved = await store.save(
+        buildReviewArtifact({
+          result: {
+            target: { scope: 'working_tree' },
+            intensity: 'standard',
+            status: 'complete',
+            stats: { fileCount: 1, additions: 1, deletions: 0, files: [] },
+            summary: 'Reviewed 1 file.',
+            comments: [
+              {
+                id: 'c1',
+                sourceCommentIds: [],
+                severity: 'critical',
+                path: 'src/a.ts',
+                line: 1,
+                title: 'Bug',
+                body: 'Wrong.',
+              },
+            ],
+          },
+          createdAt: '2026-06-14T14:30:52Z',
+          diff: '',
+        }),
+      );
+
+      expect((await session.listReviews()).map((summary) => summary.id)).toEqual([saved.id]);
+      expect((await session.readReview(saved.id))?.comments[0]?.title).toBe('Bug');
+
+      const rejected = await session.rejectReviewComment(saved.id, 'c1', 'nope');
+      expect(rejected?.comments[0]?.state).toBe('dismissed');
+      expect(rpc.emitEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'review.comment.rejected',
+          reviewId: saved.id,
+          commentId: 'c1',
+          rejected: true,
+          note: 'nope',
+        }),
+      );
+
+      const restored = await session.restoreReviewComment(saved.id, 'c1');
+      expect(restored?.comments[0]?.state).toBe('candidate');
     } finally {
       await session.close();
     }

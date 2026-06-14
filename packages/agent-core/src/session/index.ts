@@ -41,13 +41,18 @@ import { SessionSubagentHost } from './subagent-host';
 import type { ToolServices } from '../tools/support/services';
 import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
 import {
+  buildReviewArtifact,
   getReviewScopeSummary,
   listReviewBaseRefs,
   listReviewCommits,
   previewReviewOrchestratorPlan,
   previewReviewOrchestratorTarget,
+  readReviewPatch,
+  ReviewArtifactStore,
   ReviewOrchestrator,
   SessionReviewRuntime,
+  type ReviewArtifact,
+  type ReviewArtifactSummary,
   type ReviewBaseRef,
   type ReviewCommit,
   type ReviewPlanPreview,
@@ -165,6 +170,7 @@ export class Session {
   readonly review = new SessionReviewRuntime();
   private reviewStartInFlight = false;
   private activeReviewOrchestrator: ReviewOrchestrator | undefined;
+  private reviewStoreCache: ReviewArtifactStore | undefined;
   private toolKaos: Kaos;
   private persistenceKaos: Kaos;
   private agentIdCounter = 0;
@@ -530,7 +536,8 @@ export class Session {
       });
       this.activeReviewOrchestrator = orchestrator;
       try {
-        return await orchestrator.start(input);
+        const result = await orchestrator.start(input);
+        return await this.persistReviewResult(mainAgent.kaos, result);
       } finally {
         if (this.activeReviewOrchestrator === orchestrator) {
           this.activeReviewOrchestrator = undefined;
@@ -548,6 +555,69 @@ export class Session {
       return;
     }
     this.activeReviewOrchestrator.cancel();
+  }
+
+  async listReviews(): Promise<readonly ReviewArtifactSummary[]> {
+    this.assertCodeReviewEnabled();
+    return this.reviewStore.list();
+  }
+
+  async readReview(id: number): Promise<ReviewArtifact | undefined> {
+    this.assertCodeReviewEnabled();
+    return this.reviewStore.read(id);
+  }
+
+  async rejectReviewComment(
+    id: number,
+    commentId: string,
+    note?: string,
+  ): Promise<ReviewArtifact | undefined> {
+    this.assertCodeReviewEnabled();
+    const artifact = await this.reviewStore.rejectComment(id, commentId, note);
+    if (artifact !== undefined) {
+      this.emitReviewEvent({
+        type: 'review.comment.rejected',
+        reviewId: id,
+        commentId,
+        rejected: true,
+        ...(note === undefined ? {} : { note }),
+      });
+    }
+    return artifact;
+  }
+
+  async restoreReviewComment(id: number, commentId: string): Promise<ReviewArtifact | undefined> {
+    this.assertCodeReviewEnabled();
+    const artifact = await this.reviewStore.restoreComment(id, commentId);
+    if (artifact !== undefined) {
+      this.emitReviewEvent({
+        type: 'review.comment.rejected',
+        reviewId: id,
+        commentId,
+        rejected: false,
+      });
+    }
+    return artifact;
+  }
+
+  private get reviewStore(): ReviewArtifactStore {
+    this.reviewStoreCache ??= new ReviewArtifactStore(this.persistenceKaos, this.options.homedir);
+    return this.reviewStoreCache;
+  }
+
+  /** Persist a finished review and stamp the returned result with its ordinal. */
+  private async persistReviewResult(kaos: Kaos, result: ReviewResult): Promise<ReviewResult> {
+    if (result.comments.length === 0) return result;
+    try {
+      const diff = await readReviewPatch(kaos, result.target);
+      const artifact = await this.reviewStore.save(
+        buildReviewArtifact({ result, createdAt: new Date().toISOString(), diff }),
+      );
+      return { ...result, reviewId: artifact.id };
+    } catch (error) {
+      this.log.error('review artifact persist failed', error);
+      return result;
+    }
   }
 
   get hasActiveTurn(): boolean {

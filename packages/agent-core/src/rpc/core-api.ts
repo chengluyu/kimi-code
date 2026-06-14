@@ -22,6 +22,8 @@ import type { ContentPart } from '@moonshot-ai/kosong';
 
 import type { PluginInfo, PluginSummary, ReloadSummary } from '#/plugin';
 import type {
+  ReviewArtifact,
+  ReviewArtifactSummary,
   ReviewBaseRef,
   ReviewCommit,
   ReviewPlanPreview,
@@ -308,6 +310,21 @@ export type PreviewReviewPlanPayload = ReviewStartInput;
 
 export type StartReviewPayload = ReviewStartInput;
 
+export interface ReadReviewPayload {
+  readonly id: number;
+}
+
+export interface RejectReviewCommentPayload {
+  readonly id: number;
+  readonly commentId: string;
+  readonly note?: string;
+}
+
+export interface RestoreReviewCommentPayload {
+  readonly id: number;
+  readonly commentId: string;
+}
+
 export interface GetKimiConfigPayload {
   readonly reload?: boolean;
 }
@@ -380,6 +397,10 @@ export interface SessionAPI extends AgentAPIWithId {
   previewReviewPlan: (payload: PreviewReviewPlanPayload) => ReviewPlanPreview;
   startReview: (payload: StartReviewPayload) => ReviewResult;
   cancelReview: (payload: EmptyPayload) => void;
+  listReviews: (payload: EmptyPayload) => readonly ReviewArtifactSummary[];
+  readReview: (payload: ReadReviewPayload) => ReviewArtifact | undefined;
+  rejectReviewComment: (payload: RejectReviewCommentPayload) => ReviewArtifact | undefined;
+  restoreReviewComment: (payload: RestoreReviewCommentPayload) => ReviewArtifact | undefined;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;
