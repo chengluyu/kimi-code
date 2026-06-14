@@ -111,22 +111,6 @@ export function reviewCommitChoice(commit: ReviewCommit): ReviewChoice {
   };
 }
 
-export function formatReviewResultMarkdown(result: ReviewResult): string {
-  if (result.comments.length === 0) return result.summary;
-
-  const lines = [result.summary, ''];
-  for (const comment of result.comments) {
-    lines.push(
-      `- **${severityLabel(comment.severity)}** ${comment.path}:${String(comment.line)} - ${comment.title}`,
-    );
-    lines.push(`  ${comment.body}`);
-    if (comment.suggestedFix !== undefined) {
-      lines.push(`  Suggested fix: ${comment.suggestedFix}`);
-    }
-  }
-  return lines.join('\n');
-}
-
 const SEVERITY_ORDER: readonly ReviewCommentSeverity[] = ['critical', 'important', 'minor'];
 
 interface CompactComment {
