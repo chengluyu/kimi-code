@@ -115,6 +115,29 @@ describe('ReviewSummaryComponent', () => {
     expect(later).toBeGreaterThan(earlier);
   });
 
+  it('shows kept and rejected counts in the browsed heading', () => {
+    const out = lines(
+      data(
+        [
+          comment({ rejected: false, title: 'Keep me' }),
+          comment({ rejected: false, title: 'Keep me too' }),
+          comment({ rejected: true, title: 'Drop me' }),
+        ],
+        { variant: 'browsed' },
+      ),
+    );
+    const heading = out.find((line) => line.includes('Code review browsed'));
+    expect(heading).toContain('2 kept');
+    expect(heading).toContain('1 rejected');
+  });
+
+  it('omits the rejected count in the browsed heading when nothing was rejected', () => {
+    const out = lines(data([comment({ rejected: false })], { variant: 'browsed' }));
+    const heading = out.find((line) => line.includes('Code review browsed'));
+    expect(heading).toContain('1 kept');
+    expect(heading).not.toContain('rejected');
+  });
+
   it('shows a gray follow-up tip on the browsed note when there are comments', () => {
     const out = lines(data([comment({ rejected: true })], { variant: 'browsed' }));
     const tip = out.findIndex((line) => line.includes('Tips: Ask Kimi to fix these comments'));

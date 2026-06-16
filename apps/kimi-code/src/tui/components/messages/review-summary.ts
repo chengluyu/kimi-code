@@ -69,11 +69,13 @@ export class ReviewSummaryComponent implements Component {
 
   private renderBrowsed(width: number): string[] {
     const rejected = this.data.comments.filter((comment) => comment.rejected);
-    const heading =
+    const kept = this.data.comments.length - rejected.length;
+    const dot = currentTheme.fg('textDim', ' · ');
+    let heading =
       currentTheme.boldFg('success', `${STATUS_BULLET}Code review browsed`) +
-      currentTheme.fg('textDim', rejected.length === 0
-        ? ' · no comments rejected'
-        : ` · ${String(rejected.length)} rejected`);
+      dot +
+      currentTheme.fg('textDim', `${String(kept)} kept`);
+    if (rejected.length > 0) heading += dot + currentTheme.fg('textDim', `${String(rejected.length)} rejected`);
     const lines = ['', heading];
     for (const comment of rejected) {
       lines.push('   ' + currentTheme.fg('textDim', `• ${comment.path}:${String(comment.line)} — ${comment.title}`));
