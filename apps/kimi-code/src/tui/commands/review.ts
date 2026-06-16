@@ -270,11 +270,6 @@ async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult)
         description: `Read each comment next to its code, one at a time. Reopen any time with /review read ${handle}.`,
       },
       {
-        value: 'export',
-        label: 'Export to Markdown',
-        description: `Save all the comments to a Markdown file. Or run /review export ${handle} yourself.`,
-      },
-      {
         value: 'chat',
         label: 'Back to chat',
         description: 'Go back to the conversation to talk about the comments or ask the agent to fix them.',
@@ -282,15 +277,16 @@ async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult)
     ],
     optionSpacing: 'relaxed',
   });
+  // Record which follow-up the user took (Esc counts as "back to chat") so we
+  // can see how often reviews get browsed vs. discussed in chat.
+  host.track('review_followup_choice', { choice: choice === 'browse' ? 'browse' : 'chat' });
   if (choice === 'browse') {
     const artifact = await host.requireSession().readReview(reviewId);
     if (artifact === undefined) {
       host.showError(`Review ${String(reviewId)} could not be opened.`);
       return;
     }
-    openReviewReader(host, artifact);
-  } else if (choice === 'export') {
-    await handleReviewExport(host, String(reviewId));
+    openReviewReaderFullscreen(host, artifact, 0);
   }
 }
 

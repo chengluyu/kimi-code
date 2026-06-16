@@ -1,4 +1,5 @@
 import type {
+  ReviewArtifact,
   ReviewBaseRef,
   ReviewCommit,
   ReviewIntensity,
@@ -134,6 +135,7 @@ function makeHost(input: {
     previewReviewTarget: vi.fn(async (target) => preview(target)),
     previewReviewPlan: vi.fn(async (reviewInput) => plan(reviewInput.intensity)),
     startReview: vi.fn(async (reviewInput) => result(reviewInput.target, reviewInput.intensity)),
+    readReview: vi.fn(async (): Promise<ReviewArtifact | undefined> => undefined),
   };
   const spinnerStop = vi.fn();
   const transientStatusClear = vi.fn();
@@ -142,6 +144,7 @@ function makeHost(input: {
     const panel = mountEditorReplacement.mock.calls.at(-1)?.[0] as { dispose?: () => void } | undefined;
     panel?.dispose?.();
   });
+  const uiChildren: unknown[] = [];
   const host = {
     state: {
       appState: {
@@ -150,7 +153,19 @@ function makeHost(input: {
       reviewActive: false,
       reviewResultPending: false,
       theme: currentTheme,
-      ui: { requestRender: vi.fn() },
+      terminal: { rows: 40, columns: 120 },
+      editor: {},
+      ui: {
+        children: uiChildren,
+        clear: vi.fn(() => {
+          uiChildren.length = 0;
+        }),
+        addChild: vi.fn((child: unknown) => {
+          uiChildren.push(child);
+        }),
+        setFocus: vi.fn(),
+        requestRender: vi.fn(),
+      },
     },
     session,
     requireSession: () => session,
@@ -159,6 +174,7 @@ function makeHost(input: {
     showTransientStatus: vi.fn(() => ({ clear: transientStatusClear })),
     showNotice: vi.fn(),
     appendTranscriptEntry: vi.fn(),
+    track: vi.fn(),
     setReviewActive: vi.fn((active: boolean) => {
       host.state.reviewActive = active;
     }),
@@ -591,5 +607,80 @@ describe('handleReviewCommand', () => {
     );
     expect(host.showProgressSpinner).not.toHaveBeenCalled();
     expect(spinnerStop).not.toHaveBeenCalled();
+  });
+
+  describe('post-review follow-up', () => {
+    function completedResult(): ReviewResult {
+      return { ...result({ scope: 'working_tree' }), reviewId: 2, reviewSlug: 'topic-slug' };
+    }
+
+    function artifact(): ReviewArtifact {
+      return { slug: 'topic-slug', target: { scope: 'working_tree' }, diff: '', comments: [] } as unknown as ReviewArtifact;
+    }
+
+    // Returns the in-flight command in a wrapper so `await` does not flatten
+    // (and block on) the still-pending command promise.
+    async function reachFollowUp(host: SlashCommandHost): Promise<{ task: Promise<void> }> {
+      const task = handleReviewCommand(host, '');
+      await waitForPicker(host, 1);
+      mountedPicker(host, 0).handleInput(ENTER);
+      await waitForPicker(host, 2);
+      mountedPicker(host, 1).handleInput(ENTER);
+      await waitForPicker(host, 3);
+      return { task };
+    }
+
+    it('no longer offers Export to Markdown', async () => {
+      const { host, session } = makeHost();
+      session.startReview.mockResolvedValueOnce(completedResult());
+      const { task } = await reachFollowUp(host);
+
+      const lines = strippedPickerLines(host, 2).join('\n');
+      expect(lines).toContain('Browse comments');
+      expect(lines).toContain('Back to chat');
+      expect(lines).not.toContain('Export to Markdown');
+
+      mountedPicker(host, 2).handleInput(ESC);
+      await task;
+    });
+
+    it('opens the full-screen reader and records telemetry when Browse is chosen', async () => {
+      const { host, session } = makeHost();
+      session.startReview.mockResolvedValueOnce(completedResult());
+      session.readReview.mockResolvedValueOnce(artifact());
+      const { task } = await reachFollowUp(host);
+
+      mountedPicker(host, 2).handleInput(ENTER); // first option: Browse comments
+      await task;
+
+      expect(host.track).toHaveBeenCalledWith('review_followup_choice', { choice: 'browse' });
+      expect(session.readReview).toHaveBeenCalledWith(2);
+      expect(host.state.ui.addChild).toHaveBeenCalled();
+    });
+
+    it('records telemetry and stays in chat when Back to chat is chosen', async () => {
+      const { host, session } = makeHost();
+      session.startReview.mockResolvedValueOnce(completedResult());
+      const { task } = await reachFollowUp(host);
+
+      mountedPicker(host, 2).handleInput(DOWN);
+      mountedPicker(host, 2).handleInput(ENTER); // second option: Back to chat
+      await task;
+
+      expect(host.track).toHaveBeenCalledWith('review_followup_choice', { choice: 'chat' });
+      expect(session.readReview).not.toHaveBeenCalled();
+    });
+
+    it('counts Esc as back to chat for telemetry', async () => {
+      const { host, session } = makeHost();
+      session.startReview.mockResolvedValueOnce(completedResult());
+      const { task } = await reachFollowUp(host);
+
+      mountedPicker(host, 2).handleInput(ESC);
+      await task;
+
+      expect(host.track).toHaveBeenCalledWith('review_followup_choice', { choice: 'chat' });
+      expect(session.readReview).not.toHaveBeenCalled();
+    });
   });
 });
