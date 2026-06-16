@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { clampIndex } from '#/tui/components/dialogs/review-reader';
+import { clampIndex } from '#/tui/components/dialogs/review-reader-shared';
 
 describe('clampIndex', () => {
   it('keeps the index within [0, length)', () => {

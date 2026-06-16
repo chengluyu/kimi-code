@@ -26,7 +26,7 @@ import { currentTheme, type ColorToken } from '#/tui/theme';
 import { reviewTargetHeading } from '@/tui/utils/review-options';
 import { buildFileDiff, type FileDiffRow } from '@/tui/utils/review-diff';
 import { printableChar } from '@/tui/utils/printable-key';
-import { clampIndex, SEVERITY_TAG, severityColor, wrap } from './review-reader';
+import { clampIndex, SEVERITY_TAG, severityColor, wrap } from './review-reader-shared';
 
 const MIN_WIDTH = 60;
 const MIN_HEIGHT = 8;

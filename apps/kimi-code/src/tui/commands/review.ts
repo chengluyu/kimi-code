@@ -13,7 +13,6 @@ import type {
 } from '@moonshot-ai/kimi-code-sdk';
 
 import { ChoicePickerComponent, type ChoiceOption } from '../components/dialogs/choice-picker';
-import { ReviewReaderComponent } from '../components/dialogs/review-reader';
 import { ReviewReaderFullscreenApp } from '../components/dialogs/review-reader-fullscreen';
 import { LLM_NOT_SET_MESSAGE, NO_ACTIVE_SESSION_MESSAGE } from '../constant/kimi-tui';
 import {
@@ -204,33 +203,11 @@ function reviewMutationCallbacks(host: SlashCommandHost, artifact: ReviewArtifac
   };
 }
 
-/** Open the drawer reader (default). Pressing `f` hands off to the fullscreen reader. */
-function openReviewReader(host: SlashCommandHost, artifact: ReviewArtifact, index?: number): void {
-  host.mountEditorReplacement(
-    new ReviewReaderComponent({
-      artifact,
-      initialIndex: index,
-      ...reviewMutationCallbacks(host, artifact),
-      onClose: (updated) => {
-        host.restoreEditor();
-        appendReviewBrowsed(host, updated);
-      },
-      onFullscreen: (current, currentIndex) => {
-        host.restoreEditor();
-        openReviewReaderFullscreen(host, current, currentIndex);
-      },
-      requestRender: () => {
-        host.state.ui.requestRender();
-      },
-    }),
-  );
-}
-
 /** Open the full-screen reader via container swap (saves/restores the UI children). */
-function openReviewReaderFullscreen(
+function openReviewReader(
   host: SlashCommandHost,
   artifact: ReviewArtifact,
-  index: number,
+  index = 0,
 ): void {
   const ui = host.state.ui;
   const saved = [...ui.children];
