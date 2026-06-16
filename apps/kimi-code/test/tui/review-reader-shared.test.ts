@@ -265,3 +265,20 @@ describe('ReviewReaderFullscreenApp comment order', () => {
     expect(positions).toEqual(positions.toSorted((a, b) => a - b));
   });
 });
+
+describe('ReviewReaderFullscreenApp status line', () => {
+  it('keeps the full hint with all key labels', () => {
+    const app = new ReviewReaderFullscreenApp({
+      artifact: markdownArtifact(),
+      terminal: { rows: 40, columns: 120 } as never,
+      onReject: async () => undefined,
+      onRestore: async () => undefined,
+      onClose: () => {},
+      requestRender: vi.fn(),
+    });
+    const footer = (app.render(120).at(-1) ?? '').replaceAll(ANSI_SGR, '');
+    for (const label of ['comment', 'scroll', 'y keep', 'n reject', 'q close']) {
+      expect(footer).toContain(label);
+    }
+  });
+});

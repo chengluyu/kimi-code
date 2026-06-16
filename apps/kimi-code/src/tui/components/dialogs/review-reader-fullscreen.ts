@@ -181,10 +181,21 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
   }
 
   private renderFooter(width: number): string {
-    const exportHint = this.props.onExport === undefined ? '' : 'e export · ';
-    const hint = `↑/↓ comment · j/k scroll · y keep · n reject · ${exportHint}q close`;
+    const keys: [string, string][] = [
+      ['↑/↓', 'comment'],
+      ['j/k', 'scroll'],
+      ['y', 'keep'],
+      ['n', 'reject'],
+    ];
+    if (this.props.onExport !== undefined) keys.push(['e', 'export']);
+    keys.push(['q', 'close']);
+    // Normal text, with only the key character bold.
+    const sep = currentTheme.fg('textDim', ' · ');
+    const hint = keys
+      .map(([key, label]) => `${currentTheme.boldFg('text', key)} ${currentTheme.fg('text', label)}`)
+      .join(sep);
     const flash = this.flash === undefined ? '' : currentTheme.fg('success', `  ${this.flash}`);
-    return cell(currentTheme.fg('primary', ` ${hint}`) + flash, width);
+    return cell(` ${hint}${flash}`, width);
   }
 
   private renderList(width: number, height: number): string[] {
