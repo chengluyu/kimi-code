@@ -33,6 +33,13 @@ describe('default agent profiles', () => {
     }
   });
 
+  it('allowlists the RunCodeReview fan-out tool on the main agent profile', () => {
+    // The tool instance is only registered when the code_review flag is on, but
+    // it must be in the profile allowlist or it is filtered out before the model
+    // ever sees it.
+    expect(DEFAULT_AGENT_PROFILES['agent']?.tools).toContain('RunCodeReview');
+  });
+
   it('registers reviewer and reconciliator as narrow read-only subagents', () => {
     expect(Object.keys(DEFAULT_AGENT_PROFILES['agent']?.subagents ?? {})).toEqual(
       expect.arrayContaining(['reviewer', 'reconciliator']),
