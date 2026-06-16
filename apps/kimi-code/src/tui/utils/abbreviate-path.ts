@@ -16,7 +16,7 @@
  * the pinned visual contract.
  */
 
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { visibleWidth } from '@earendil-works/pi-tui';
 
 const ELLIPSIS = '…';
 /** Marks a collapsed run of several omitted segments. */
@@ -66,6 +66,19 @@ export function abbreviatePath(path: string, maxWidth: number): string {
   return truncateSegment(path, maxWidth);
 }
 
+/**
+ * Clip plain text to `width`, appending `…` when truncated. Unlike pi-tui's
+ * `truncateToWidth` with an ellipsis marker, the result carries NO ANSI reset
+ * codes, so the caller can color the whole string (including the ellipsis)
+ * without the reset breaking the color mid-string.
+ */
+export function clipToWidth(text: string, width: number): string {
+  if (width <= 0) return '';
+  if (visibleWidth(text) <= width) return text;
+  if (width === 1) return ELLIPSIS;
+  return `${clipPlain(text, width - 1)}${ELLIPSIS}`;
+}
+
 /** A run of omitted segments: one `…` each, collapsing to `……` when long. */
 function middleRun(count: number): string[] {
   if (count <= 0) return [];
@@ -81,8 +94,21 @@ function truncateSegment(segment: string, width: number): string {
   const dot = segment.lastIndexOf('.');
   const ext = dot > 0 ? segment.slice(dot) : '';
   if (ext.length > 0 && visibleWidth(ext) + 1 < width) {
-    const prefix = truncateToWidth(segment, width - 1 - visibleWidth(ext), '');
-    return `${prefix}${ELLIPSIS}${ext}`;
+    return `${clipPlain(segment, width - 1 - visibleWidth(ext))}${ELLIPSIS}${ext}`;
   }
-  return `${truncateToWidth(segment, width - 1, '')}${ELLIPSIS}`;
+  return `${clipPlain(segment, width - 1)}${ELLIPSIS}`;
+}
+
+/** Hard-cut text to `width` columns. Pure: no ellipsis and no ANSI codes. */
+function clipPlain(text: string, width: number): string {
+  if (width <= 0) return '';
+  let out = '';
+  let used = 0;
+  for (const char of Array.from(text)) {
+    const charWidth = visibleWidth(char);
+    if (used + charWidth > width) break;
+    out += char;
+    used += charWidth;
+  }
+  return out;
 }

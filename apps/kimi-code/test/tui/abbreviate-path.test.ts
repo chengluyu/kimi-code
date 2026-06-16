@@ -1,7 +1,7 @@
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
 
-import { abbreviatePath } from '#/tui/utils/abbreviate-path';
+import { abbreviatePath, clipToWidth } from '#/tui/utils/abbreviate-path';
 
 const LONG = 'this/is/a/long/path/and/should/be/omitted/right.md';
 
@@ -57,5 +57,24 @@ describe('abbreviatePath', () => {
     for (let width = 1; width <= 60; width++) {
       expect(visibleWidth(abbreviatePath(LONG, width))).toBeLessThanOrEqual(width);
     }
+  });
+});
+
+describe('clipToWidth', () => {
+  it('returns the text unchanged when it fits', () => {
+    expect(clipToWidth('short title', 40)).toBe('short title');
+  });
+
+  it('truncates with a trailing ellipsis and never exceeds the width', () => {
+    const out = clipToWidth('a fairly long commit subject line', 12);
+    expect(visibleWidth(out)).toBeLessThanOrEqual(12);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('produces no ANSI escape codes, so callers can color the whole string', () => {
+    const out = clipToWidth('a fairly long commit subject line', 12);
+    // pi-tui truncateToWidth with an ellipsis marker wraps it in reset codes;
+    // clipToWidth must not, or coloring the result would break at the ellipsis.
+    expect(/\u001B/.test(out)).toBe(false);
   });
 });

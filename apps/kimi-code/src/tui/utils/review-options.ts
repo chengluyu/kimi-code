@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { visibleWidth } from '@earendil-works/pi-tui';
 import type {
   ReviewArtifact,
   ReviewBaseRef,
@@ -11,6 +11,7 @@ import type {
 } from '@moonshot-ai/kimi-code-sdk';
 
 import { currentTheme } from '#/tui/theme';
+import { clipToWidth } from '#/tui/utils/abbreviate-path';
 import type { ReviewSummaryTranscriptData } from '#/tui/types';
 
 export type ReviewScopeChoice = 'working_tree' | 'current_branch' | 'ahead_of_upstream' | 'single_commit';
@@ -121,11 +122,11 @@ export function reviewCommitChoice(commit: ReviewCommit): ReviewChoice {
 function renderCommitRow(commit: ReviewCommit, selected: boolean, width: number): readonly string[] {
   const shortSha = commit.sha.slice(0, 8);
   const hash = currentTheme.fg('warning', shortSha);
-  // A `↵` marks a commit message with a body; `…` (from truncateToWidth) marks
+  // A `↵` marks a commit message with a body; `…` (from clipToWidth) marks
   // a subject that did not fit on the line.
   const bodyMark = commit.hasBody === true ? ' ↵' : '';
   const titleBudget = Math.max(1, width - visibleWidth(shortSha) - 1 - visibleWidth(bodyMark));
-  const title = currentTheme.boldFg(selected ? 'primary' : 'text', truncateToWidth(commit.title, titleBudget, '…'));
+  const title = currentTheme.boldFg(selected ? 'primary' : 'text', clipToWidth(commit.title, titleBudget));
   const head = `${hash} ${title}${currentTheme.fg('textDim', bodyMark)}`;
 
   const meta: string[] = [];

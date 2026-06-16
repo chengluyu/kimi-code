@@ -23,7 +23,7 @@ import type { ReviewArtifact, ReviewArtifactComment } from '@moonshot-ai/kimi-co
 
 import { highlightLines, langFromPath } from '@/tui/components/media/code-highlight';
 import { currentTheme, type ColorToken } from '#/tui/theme';
-import { abbreviatePath } from '@/tui/utils/abbreviate-path';
+import { abbreviatePath, clipToWidth } from '@/tui/utils/abbreviate-path';
 import { reviewTargetHeading } from '@/tui/utils/review-options';
 import { buildFileDiff, type FileDiffRow } from '@/tui/utils/review-diff';
 import { printableChar } from '@/tui/utils/printable-key';
@@ -307,7 +307,7 @@ function renderBand(comment: ReviewArtifactComment, gutterWidth: number, width: 
   const severity = SEVERITY_TAG[comment.severity];
   const titleBudget = Math.max(1, inner - visibleWidth(severity) - 2);
   const titleBar =
-    currentTheme.fg(tone, severity) + '  ' + currentTheme.boldFg('text', truncateToWidth(comment.title, titleBudget, '…'));
+    currentTheme.fg(tone, severity) + '  ' + currentTheme.boldFg('text', clipToWidth(comment.title, titleBudget));
   // Render the body through the shared Markdown component so it matches chat.
   const body = comment.body.length > 0 ? renderMarkdownLines(comment.body, inner) : [];
 
