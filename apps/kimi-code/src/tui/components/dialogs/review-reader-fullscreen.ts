@@ -23,6 +23,7 @@ import type { ReviewArtifact, ReviewArtifactComment } from '@moonshot-ai/kimi-co
 
 import { highlightLines, langFromPath } from '@/tui/components/media/code-highlight';
 import { currentTheme, type ColorToken } from '#/tui/theme';
+import { abbreviatePath } from '@/tui/utils/abbreviate-path';
 import { reviewTargetHeading } from '@/tui/utils/review-options';
 import { buildFileDiff, type FileDiffRow } from '@/tui/utils/review-diff';
 import { printableChar } from '@/tui/utils/printable-key';
@@ -179,7 +180,9 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
       const tag = rejected
         ? currentTheme.fg('textDim', '⌫ rejected')
         : severityColor(comment.severity)(SEVERITY_TAG[comment.severity]);
-      const loc = currentTheme.fg('textDim', truncateLeft(`${comment.anchor.path}:${String(comment.anchor.line)}`, width - 14));
+      const lineSuffix = `:${String(comment.anchor.line)}`;
+      const pathBudget = Math.max(1, width - 14 - visibleWidth(lineSuffix));
+      const loc = currentTheme.fg('textDim', `${abbreviatePath(comment.anchor.path, pathBudget)}${lineSuffix}`);
       lines.push(`${pointer}${tag}  ${loc}`);
       const titleColor: ColorToken = rejected ? 'textDim' : 'text';
       for (const titleLine of wrap(comment.title, width - 2)) {
@@ -266,11 +269,4 @@ function renderBand(comment: ReviewArtifactComment, gutterWidth: number, width: 
 function cell(line: string, width: number): string {
   const truncated = truncateToWidth(line, width, '…');
   return truncated + ' '.repeat(Math.max(0, width - visibleWidth(truncated)));
-}
-
-/** Truncate from the left, keeping the tail (so long paths keep file + line). */
-function truncateLeft(text: string, width: number): string {
-  if (width <= 1) return text.slice(-1);
-  if (text.length <= width) return text;
-  return '…' + text.slice(-(width - 1));
 }
