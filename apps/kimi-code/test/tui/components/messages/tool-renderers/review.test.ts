@@ -9,7 +9,7 @@ describe('review tool activity labels', () => {
       version: 'current',
       line_offset: 1,
     })).toBe(
-      'Read current file state (packages/agent-core/src/review/prompts.ts · from line 1)',
+      'Read current file state (packages/agent-core/…/review/prompts.ts · from line 1)',
     );
 
     expect(formatReviewToolActivityLabel('ReadFileVersion', {
@@ -18,7 +18,7 @@ describe('review tool activity labels', () => {
       line_offset: 40,
       n_lines: 8,
     })).toBe(
-      'Read base file state (packages/agent-core/src/review/prompts.ts · lines 40-47)',
+      'Read base file state (packages/agent-core/…/review/prompts.ts · lines 40-47)',
     );
 
     expect(formatReviewToolActivityLabel('ReadFileVersion', {
@@ -27,7 +27,7 @@ describe('review tool activity labels', () => {
       line_offset: 7,
       n_lines: 1,
     })).toBe(
-      'Read file at ref (packages/agent-core/src/review/prompts.ts · ref a58b5b2 · line 7)',
+      'Read file at ref (packages/agent-core/…/review/prompts.ts · ref a58b5b2 · line 7)',
     );
   });
 
@@ -51,6 +51,18 @@ describe('review tool activity labels', () => {
       severity: 'important',
       title: 'Validate input',
     })).toBe('Added review comment (src/a.ts:12 · important · Validate input)');
+  });
+
+  it('abbreviates long paths in comment labels so they do not overflow', () => {
+    const label = formatReviewToolActivityLabel('AddComment', {
+      path: 'packages/agent-core/src/review/artifact.ts',
+      line: 146,
+      severity: 'critical',
+      title: 'Concurrent review saves can overwrite each other',
+    });
+    // The middle of the path is elided; the package root and file name remain.
+    expect(label).toContain('packages/agent-core/…/review/artifact.ts:146');
+    expect(label).not.toContain('agent-core/src/review/artifact.ts');
   });
 
   it('formats legacy ReadPatch records for replay', () => {

@@ -1,5 +1,7 @@
 import type { ToolInputDisplay } from '@moonshot-ai/kimi-code-sdk';
 
+import { abbreviatePath } from '#/tui/utils/abbreviate-path';
+
 import { renderTruncated } from './truncated';
 import type { ResultRenderer } from './types';
 
@@ -23,6 +25,12 @@ const REVIEW_TOOL_NAMES = new Set([
 ]);
 const FULL_GIT_OBJECT_ID_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 const SHORT_GIT_OBJECT_ID_LENGTH = 7;
+/** Cap on path width inside one-line tool labels, so long paths don't overflow. */
+const LABEL_PATH_MAX_WIDTH = 40;
+
+function shortLabelPath(path: string): string {
+  return abbreviatePath(path, LABEL_PATH_MAX_WIDTH);
+}
 
 export const reviewSummary: ResultRenderer = (toolCall, result, ctx) => {
   if (result.is_error) return renderTruncated(toolCall, result, ctx);
@@ -148,8 +156,9 @@ function readFileVersionDetail(
   if (!hasFileArgs) return displayDetail(display);
   const ref = stringArg(args, 'ref');
   const source = ref === undefined ? undefined : `ref ${formatReviewRefForLabel(ref)}`;
+  const path = stringArg(args, 'path');
   return joinDetails([
-    stringArg(args, 'path'),
+    path === undefined ? undefined : shortLabelPath(path),
     source,
     lineRangeLabel(numberArg(args, 'line_offset'), numberArg(args, 'n_lines')),
   ]);
@@ -164,7 +173,7 @@ function commentsDetail(
   return joinDetails([
     stringArg(args, 'status'),
     scope === 'assigned' ? 'assigned scope' : 'all scope',
-    paths === undefined ? undefined : paths.join(', '),
+    paths === undefined ? undefined : paths.map(shortLabelPath).join(', '),
     boolArg(args, 'include_sources') === true ? 'include sources' : undefined,
   ]) ?? displayDetail(display);
 }
@@ -268,7 +277,7 @@ function legacyPathArg(args: Record<string, unknown>): string[] | undefined {
 
 function pathsDetail(paths: readonly string[] | undefined): string | undefined {
   if (paths === undefined) return 'assigned files';
-  if (paths.length === 1) return paths[0];
+  if (paths.length === 1) return shortLabelPath(paths[0]!);
   return countLabel(paths.length, 'file', 'files');
 }
 
@@ -284,8 +293,9 @@ function prefixed(prefix: string, value: string | undefined): string | undefined
 
 function pathLineDetail(path: string | undefined, line: number | undefined): string | undefined {
   if (path === undefined || path.length === 0) return undefined;
-  if (line === undefined) return path;
-  return `${path}:${String(line)}`;
+  const short = shortLabelPath(path);
+  if (line === undefined) return short;
+  return `${short}:${String(line)}`;
 }
 
 function formatReviewRefForLabel(ref: string): string {
