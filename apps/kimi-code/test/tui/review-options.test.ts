@@ -5,8 +5,14 @@ import type { ReviewArtifact, ReviewResult } from '@moonshot-ai/kimi-code-sdk';
 import {
   buildReviewArtifactSummaryData,
   buildReviewSummaryData,
+  formatRelativeTime,
   formatReviewArtifactMarkdown,
+  resolveTtyLocale,
+  reviewCommitChoice,
 } from '#/tui/utils/review-options';
+
+const ANSI_SGR = /\[[0-9;]*m/g;
+const strip = (text: string) => text.replaceAll(ANSI_SGR, '');
 
 const STATS = {
   fileCount: 2,
@@ -99,5 +105,85 @@ describe('buildReviewArtifactSummaryData / formatReviewArtifactMarkdown', () => 
     expect(md).not.toContain('## Minor');
     expect(md).toContain('## Rejected');
     expect(md).toContain('- ~~src/b.ts:3 — Redundant clone~~');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const now = Date.parse('2026-06-16T12:00:00Z');
+
+  it('formats recent times with Intl relative units', () => {
+    expect(formatRelativeTime('2026-06-16T10:00:00Z', now, 'en')).toBe('2 hours ago');
+    expect(formatRelativeTime('2026-06-15T12:00:00Z', now, 'en')).toBe('yesterday');
+    expect(formatRelativeTime('2026-06-09T12:00:00Z', now, 'en')).toBe('last week');
+    expect(formatRelativeTime('2026-03-16T12:00:00Z', now, 'en')).toBe('3 months ago');
+  });
+
+  it('returns empty for an unparseable date', () => {
+    expect(formatRelativeTime('not-a-date', now, 'en')).toBe('');
+  });
+
+  it('does not throw on a malformed locale and still formats', () => {
+    expect(formatRelativeTime('2026-06-16T10:00:00Z', now, 'not a locale!!')).toBe('2 hours ago');
+  });
+});
+
+describe('resolveTtyLocale', () => {
+  it('parses POSIX locale env vars into BCP-47 tags', () => {
+    expect(resolveTtyLocale({ LANG: 'fr_FR.UTF-8' })).toBe('fr-FR');
+    expect(resolveTtyLocale({ LC_ALL: 'de_DE.UTF-8', LANG: 'en_US.UTF-8' })).toBe('de-DE');
+    expect(resolveTtyLocale({ LANGUAGE: 'es_ES:en' })).toBe('es-ES');
+    expect(resolveTtyLocale({ LANG: 'zh_CN.UTF-8@pinyin' })).toBe('zh-CN');
+  });
+
+  it('falls back to en for unset, C, or POSIX locales', () => {
+    expect(resolveTtyLocale({})).toBe('en');
+    expect(resolveTtyLocale({ LANG: 'C' })).toBe('en');
+    expect(resolveTtyLocale({ LC_ALL: 'POSIX' })).toBe('en');
+  });
+});
+
+describe('reviewCommitChoice', () => {
+  const base = {
+    sha: '3980a555807687914079243f9476fef93cbfd081',
+    title: 'feat(review): run deep review through AgentSwarm',
+    date: '2026-06-16T10:00:00Z',
+    filesChanged: 3,
+    additions: 40,
+    deletions: 10,
+    hasBody: false,
+  };
+
+  it('uses an 8-char short hash and a searchable label', () => {
+    const choice = reviewCommitChoice(base);
+    expect(choice.value).toBe(base.sha);
+    expect(choice.label).toBe('3980a555 feat(review): run deep review through AgentSwarm');
+  });
+
+  it('renders the hash, bold title, and colored stats line', () => {
+    const [head, meta] = reviewCommitChoice(base).render!(false, 120).map(strip);
+    expect(head).toContain('3980a555');
+    expect(head).toContain('feat(review): run deep review through AgentSwarm');
+    expect(meta).toContain('3 files');
+    expect(meta).toContain('+40');
+    expect(meta).toContain('-10');
+  });
+
+  it('marks a commit with a body using ↵', () => {
+    const [head] = reviewCommitChoice({ ...base, hasBody: true }).render!(false, 120).map(strip);
+    expect(head).toContain('↵');
+  });
+
+  it('truncates a long subject with an ellipsis to fit one line', () => {
+    const long = { ...base, title: 'x'.repeat(200), hasBody: false };
+    const lines = reviewCommitChoice(long).render!(false, 40);
+    const head = strip(lines[0]!);
+    expect(head).toContain('…');
+    expect(head.split('\n')).toHaveLength(1);
+  });
+
+  it('omits the stats line when no shortstat is available', () => {
+    const merge = { sha: 'abc123def', title: 'merge', filesChanged: undefined };
+    const lines = reviewCommitChoice(merge).render!(false, 120);
+    expect(lines).toHaveLength(1);
   });
 });

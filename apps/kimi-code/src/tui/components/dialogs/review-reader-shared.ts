@@ -3,10 +3,11 @@
  * module so they survive independently of any one reader component.
  */
 
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { Markdown, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import type { ReviewArtifactComment } from '@moonshot-ai/kimi-code-sdk';
 
 import { currentTheme } from '#/tui/theme';
+import { createMarkdownTheme } from '#/tui/theme/pi-tui-theme';
 
 export const SEVERITY_TAG: Record<ReviewArtifactComment['severity'], string> = {
   critical: '! critical',
@@ -28,6 +29,16 @@ export function severityColor(severity: ReviewArtifactComment['severity']): (tex
     case 'minor':
       return (text) => currentTheme.fg('textMuted', text);
   }
+}
+
+/** Render prose through pi-tui Markdown so inline code/bold match the chat. */
+export function renderMarkdownLines(text: string, width: number): string[] {
+  const rendered = new Markdown(text.trim(), 0, 0, createMarkdownTheme()).render(Math.max(1, width));
+  // Drop trailing blank lines the block renderer may emit.
+  while (rendered.length > 0 && (rendered.at(-1) ?? '').trim().length === 0) {
+    rendered.pop();
+  }
+  return rendered;
 }
 
 export function wrap(text: string, width: number): string[] {

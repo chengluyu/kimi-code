@@ -23,10 +23,11 @@ import type { ReviewArtifact, ReviewArtifactComment } from '@moonshot-ai/kimi-co
 
 import { highlightLines, langFromPath } from '@/tui/components/media/code-highlight';
 import { currentTheme, type ColorToken } from '#/tui/theme';
+import { abbreviatePath } from '@/tui/utils/abbreviate-path';
 import { reviewTargetHeading } from '@/tui/utils/review-options';
 import { buildFileDiff, type FileDiffRow } from '@/tui/utils/review-diff';
 import { printableChar } from '@/tui/utils/printable-key';
-import { clampIndex, SEVERITY_TAG, severityColor, wrap } from './review-reader-shared';
+import { clampIndex, renderMarkdownLines, SEVERITY_TAG, severityColor, wrap } from './review-reader-shared';
 
 const MIN_WIDTH = 60;
 const MIN_HEIGHT = 8;
@@ -41,6 +42,8 @@ export interface ReviewReaderFullscreenProps {
   readonly onReject: (commentId: string) => Promise<ReviewArtifact | undefined>;
   readonly onRestore: (commentId: string) => Promise<ReviewArtifact | undefined>;
   readonly onClose: (artifact: ReviewArtifact) => void;
+  /** Export the review to a file; resolves to the written path (undefined on failure). */
+  readonly onExport?: (artifact: ReviewArtifact) => Promise<string | undefined>;
   readonly requestRender: () => void;
 }
 
@@ -83,11 +86,13 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
       this.verdict('keep');
     } else if (char === 'n') {
       this.verdict('reject');
+    } else if (char === 'e') {
+      this.exportReview();
     }
   }
 
   private get comments(): readonly ReviewArtifactComment[] {
-    return this.artifact.comments;
+    return this.artifact.comments.toSorted(compareComments);
   }
 
   private moveComment(delta: number): void {
@@ -125,6 +130,22 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
     });
   }
 
+  private exportReview(): void {
+    if (this.props.onExport === undefined) return;
+    this.flash = 'Exporting…';
+    this.props.requestRender();
+    void this.props.onExport(this.artifact).then(
+      (path) => {
+        this.flash = path === undefined ? 'Export failed.' : `Exported to ${path}`;
+        this.props.requestRender();
+      },
+      () => {
+        this.flash = 'Export failed.';
+        this.props.requestRender();
+      },
+    );
+  }
+
   override render(width: number): string[] {
     const rows = Math.max(1, this.props.terminal.rows);
     if (width < MIN_WIDTH || rows < MIN_HEIGHT) {
@@ -160,7 +181,8 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
   }
 
   private renderFooter(width: number): string {
-    const hint = '↑/↓ comment · j/k scroll · y keep · n reject · q close';
+    const exportHint = this.props.onExport === undefined ? '' : 'e export · ';
+    const hint = `↑/↓ comment · j/k scroll · y keep · n reject · ${exportHint}q close`;
     const flash = this.flash === undefined ? '' : currentTheme.fg('success', `  ${this.flash}`);
     return cell(currentTheme.fg('primary', ` ${hint}`) + flash, width);
   }
@@ -179,7 +201,9 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
       const tag = rejected
         ? currentTheme.fg('textDim', '⌫ rejected')
         : severityColor(comment.severity)(SEVERITY_TAG[comment.severity]);
-      const loc = currentTheme.fg('textDim', truncateLeft(`${comment.anchor.path}:${String(comment.anchor.line)}`, width - 14));
+      const lineSuffix = `:${String(comment.anchor.line)}`;
+      const pathBudget = Math.max(1, width - 14 - visibleWidth(lineSuffix));
+      const loc = currentTheme.fg('textDim', `${abbreviatePath(comment.anchor.path, pathBudget)}${lineSuffix}`);
       lines.push(`${pointer}${tag}  ${loc}`);
       const titleColor: ColorToken = rejected ? 'textDim' : 'text';
       for (const titleLine of wrap(comment.title, width - 2)) {
@@ -251,7 +275,9 @@ function renderBand(comment: ReviewArtifactComment, gutterWidth: number, width: 
   const inner = Math.max(8, width - indent.length - 2);
   const ruleWidth = Math.max(1, width - indent.length - 1);
   const heading = `! ${comment.severity} — ${comment.title}`;
-  const body = comment.body.length > 0 ? wrap(comment.body, inner) : [];
+  // Render the body through the shared Markdown component so bold/code/lists
+  // match the rest of the chat; the heading stays plain text.
+  const body = comment.body.length > 0 ? renderMarkdownLines(comment.body, inner) : [];
   const tone: ColorToken = comment.severity === 'critical' ? 'error' : comment.severity === 'important' ? 'warning' : 'textDim';
   const bar = currentTheme.fg(tone, '┃');
   const lines = [indent + currentTheme.fg(tone, '┎' + '─'.repeat(ruleWidth))];
@@ -268,9 +294,17 @@ function cell(line: string, width: number): string {
   return truncated + ' '.repeat(Math.max(0, width - visibleWidth(truncated)));
 }
 
-/** Truncate from the left, keeping the tail (so long paths keep file + line). */
-function truncateLeft(text: string, width: number): string {
-  if (width <= 1) return text.slice(-1);
-  if (text.length <= width) return text;
-  return '…' + text.slice(-(width - 1));
+const SEVERITY_RANK: Record<ReviewArtifactComment['severity'], number> = {
+  critical: 0,
+  important: 1,
+  minor: 2,
+};
+
+/** Order comments by severity, then file path, then line — stable across reject/restore. */
+function compareComments(a: ReviewArtifactComment, b: ReviewArtifactComment): number {
+  const severity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+  if (severity !== 0) return severity;
+  const path = a.anchor.path.localeCompare(b.anchor.path);
+  if (path !== 0) return path;
+  return a.anchor.line - b.anchor.line;
 }

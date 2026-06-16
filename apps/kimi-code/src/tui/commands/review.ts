@@ -117,13 +117,19 @@ async function handleReviewExport(host: SlashCommandHost, idArg: string | undefi
     host.showError(`Review ${String(id)} was not found.`);
     return;
   }
-  const file = uniqueExportPath(artifact.slug);
   try {
-    await writeFile(file, formatReviewArtifactMarkdown(artifact), 'utf8');
+    const file = await exportReviewArtifact(artifact);
     host.showStatus(`Exported review to ${file}.`);
   } catch (error) {
     host.showError(`Could not export review: ${formatErrorMessage(error)}`);
   }
+}
+
+/** Write a review artifact to a unique `review-<slug>.md` file and return its path. */
+async function exportReviewArtifact(artifact: ReviewArtifact): Promise<string> {
+  const file = uniqueExportPath(artifact.slug);
+  await writeFile(file, formatReviewArtifactMarkdown(artifact), 'utf8');
+  return file;
 }
 
 /** Pick a `review-<slug>.md` path in the cwd that does not already exist. */
@@ -203,6 +209,7 @@ function openReviewReader(
     initialIndex: index,
     terminal: host.state.terminal,
     ...reviewMutationCallbacks(host, artifact),
+    onExport: (current) => exportReviewArtifact(current),
     onClose: (updated) => {
       ui.clear();
       for (const child of saved) ui.addChild(child);
@@ -234,11 +241,6 @@ async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult)
         description: `Read each comment next to its code, one at a time. Reopen any time with /review read ${handle}.`,
       },
       {
-        value: 'export',
-        label: 'Export to Markdown',
-        description: `Save all the comments to a Markdown file. Or run /review export ${handle} yourself.`,
-      },
-      {
         value: 'chat',
         label: 'Back to chat',
         description: 'Go back to the conversation to talk about the comments or ask the agent to fix them.',
@@ -246,15 +248,16 @@ async function offerReviewFollowUp(host: SlashCommandHost, result: ReviewResult)
     ],
     optionSpacing: 'relaxed',
   });
+  // Record which follow-up the user took (Esc counts as "back to chat") so we
+  // can see how often reviews get browsed vs. discussed in chat.
+  host.track('review_followup_choice', { choice: choice === 'browse' ? 'browse' : 'chat' });
   if (choice === 'browse') {
     const artifact = await host.requireSession().readReview(reviewId);
     if (artifact === undefined) {
       host.showError(`Review ${String(reviewId)} could not be opened.`);
       return;
     }
-    openReviewReader(host, artifact);
-  } else if (choice === 'export') {
-    await handleReviewExport(host, String(reviewId));
+    openReviewReader(host, artifact, 0);
   }
 }
 
@@ -417,7 +420,7 @@ function toChoiceOption(choice: ReviewChoice): ChoiceOption {
   return {
     value: choice.value,
     label: choice.label,
-    labelAnimation: choice.labelAnimation,
     description: choice.description,
+    render: choice.render,
   };
 }
