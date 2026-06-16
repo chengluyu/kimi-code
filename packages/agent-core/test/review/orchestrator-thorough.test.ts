@@ -109,6 +109,32 @@ describe('ReviewOrchestrator thorough review', () => {
     });
   });
 
+  it('fans out one reviewer per provided direction instead of the defaults', async () => {
+    await withModifiedRepo(async (repo) => {
+      const runtime = createRuntime();
+      const spawned: ReviewAssignment[] = [];
+      const launcher = createLauncher({
+        onSpawn: (review) => {
+          spawned.push(review.getAssignment());
+          markPatchRead(review);
+          review.updateProgress({ status: 'complete', summary: 'Nothing to do.' });
+        },
+      });
+
+      await createOrchestrator(repo, runtime, launcher).start({
+        target: { scope: 'working_tree' },
+        intensity: 'thorough',
+        directions: ['Concurrency safety', 'API compatibility'],
+      });
+
+      const reviewers = spawned.filter((assignment) => assignment.role === 'reviewer');
+      expect(reviewers.map((assignment) => assignment.perspective)).toEqual([
+        'Concurrency safety',
+        'API compatibility',
+      ]);
+    });
+  });
+
   it('continues the reconciliator until every source comment is resolved', async () => {
     await withModifiedRepo(async (repo) => {
       const runtime = createRuntime();

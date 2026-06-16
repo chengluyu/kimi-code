@@ -122,6 +122,12 @@ export interface ReviewStartInput {
   readonly target: ReviewTarget;
   readonly intensity: ReviewIntensity;
   readonly focus?: string;
+  /**
+   * Review angles to fan out: one reviewer per direction (thorough) or
+   * multiplied across file groups (deep). Supplied by the pilot review. When
+   * omitted, the orchestrator falls back to its built-in default perspectives.
+   */
+  readonly directions?: readonly string[];
 }
 
 export interface ReviewTargetPreview {

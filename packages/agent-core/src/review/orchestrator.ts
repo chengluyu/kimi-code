@@ -161,6 +161,7 @@ export class ReviewOrchestrator {
         target: preview.target,
         intensity: input.intensity,
         focus: input.focus,
+        directions: input.directions,
       };
       const background = buildReviewBackground({
         target: preview.target,
@@ -181,7 +182,7 @@ export class ReviewOrchestrator {
         focus: input.focus,
         stats: preview.stats,
         agentSwarm: input.intensity === 'deep'
-          ? buildDeepReviewAgentSwarmEvent(preview.stats)
+          ? buildDeepReviewAgentSwarmEvent(preview.stats, input.directions)
           : undefined,
       });
 
@@ -264,7 +265,8 @@ export class ReviewOrchestrator {
 
   private async runThoroughReview(context: ReviewRunContext): Promise<ReviewResult> {
     const assignedFiles = context.stats.files.map((file) => file.path);
-    const reviewerAssignments = THOROUGH_REVIEW_PERSPECTIVES.map((perspective) =>
+    const directions = context.input.directions ?? THOROUGH_REVIEW_PERSPECTIVES;
+    const reviewerAssignments = directions.map((perspective) =>
       this.options.runtime.createAssignment({
         role: 'reviewer',
         perspective,
@@ -319,7 +321,10 @@ export class ReviewOrchestrator {
   }
 
   private async runDeepReview(context: ReviewRunContext): Promise<ReviewResult> {
-    const matrix = createDeepCoverageMatrix({ files: context.stats.files });
+    const matrix = createDeepCoverageMatrix({
+      files: context.stats.files,
+      perspectives: context.input.directions,
+    });
     const assignmentIdsByKey = new Map<string, string>();
     const reviewerAssignments = matrix.reviewerAssignments.map((spec) => {
       const assignment = this.options.runtime.createAssignment({
@@ -574,8 +579,11 @@ function hasRunQueued(launcher: ReviewWorkerLauncher): launcher is ReviewSwarmLa
   return typeof (launcher as { runQueued?: unknown }).runQueued === 'function';
 }
 
-function buildDeepReviewAgentSwarmEvent(stats: ReviewDiffStats): ReviewAgentSwarmEvent {
-  const matrix = createDeepCoverageMatrix({ files: stats.files });
+function buildDeepReviewAgentSwarmEvent(
+  stats: ReviewDiffStats,
+  directions?: readonly string[],
+): ReviewAgentSwarmEvent {
+  const matrix = createDeepCoverageMatrix({ files: stats.files, perspectives: directions });
   return {
     toolCallId: DEEP_REVIEW_AGENT_SWARM_TOOL_CALL_ID,
     args: {
