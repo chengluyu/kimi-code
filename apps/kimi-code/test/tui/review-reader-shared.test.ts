@@ -186,6 +186,68 @@ function unsortedArtifact(): ReviewArtifact {
   } as unknown as ReviewArtifact;
 }
 
+describe('ReviewReaderFullscreenApp comment list', () => {
+  function listArtifact(): ReviewArtifact {
+    const make = (
+      severity: 'critical' | 'important' | 'minor',
+      line: number,
+      title: string,
+      state: 'candidate' | 'dismissed',
+    ) => ({
+      id: `c${String(line)}`,
+      severity,
+      title,
+      body: '',
+      anchor: { path: 'src/auth.ts', side: 'new', line, hunkHeader: '@@' },
+      state,
+      dismissal: state === 'dismissed' ? { reason: 'rejected_by_user' } : null,
+    });
+    return {
+      slug: 'topic-slug',
+      target: { scope: 'working_tree' },
+      diff: '',
+      comments: [
+        make('critical', 88, 'Token refresh races on concurrent logins', 'candidate'),
+        make('minor', 7, 'Redundant clone', 'dismissed'),
+      ],
+    } as unknown as ReviewArtifact;
+  }
+
+  function listLines(): string[] {
+    const app = new ReviewReaderFullscreenApp({
+      artifact: listArtifact(),
+      terminal: { rows: 40, columns: 120 } as never,
+      onReject: async () => undefined,
+      onRestore: async () => undefined,
+      onClose: () => {},
+      requestRender: vi.fn(),
+    });
+    return app.render(120).map((line) => line.replaceAll(ANSI_SGR, ''));
+  }
+
+  it('puts the selection caret on the first title line, not the severity line', () => {
+    const out = listLines();
+    const severityLine = out.find((line) => line.includes('! critical'));
+    const titleLine = out.find((line) => line.includes('❯') && line.includes('Token refresh races'));
+    expect(severityLine).toBeDefined();
+    expect(severityLine).not.toContain('❯'); // caret is not on the severity line
+    expect(titleLine).toBeDefined();
+  });
+
+  it('shows the path on its own line', () => {
+    expect(listLines().some((line) => line.includes('src/auth.ts:88'))).toBe(true);
+  });
+
+  it('keeps the severity color and right-aligns the reject status', () => {
+    const out = listLines();
+    const sevLine = out.find((line) => line.includes('· minor'));
+    expect(sevLine).toBeDefined();
+    // The reject status shares the severity line, to the right of the severity.
+    expect(sevLine).toContain('rejected');
+    expect(sevLine!.indexOf('· minor')).toBeLessThan(sevLine!.indexOf('rejected'));
+  });
+});
+
 describe('ReviewReaderFullscreenApp comment order', () => {
   it('sorts comments by severity, then file, then line', () => {
     const app = new ReviewReaderFullscreenApp({

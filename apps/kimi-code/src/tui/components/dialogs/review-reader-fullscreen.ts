@@ -197,18 +197,34 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
       blockStart[i] = lines.length;
       const selected = i === this.index;
       const rejected = comment.state === 'dismissed';
-      const pointer = selected ? currentTheme.boldFg('primary', '❯ ') : '  ';
-      const tag = rejected
-        ? currentTheme.fg('textDim', '⌫ rejected')
-        : severityColor(comment.severity)(SEVERITY_TAG[comment.severity]);
-      const lineSuffix = `:${String(comment.anchor.line)}`;
-      const pathBudget = Math.max(1, width - 14 - visibleWidth(lineSuffix));
-      const loc = currentTheme.fg('textDim', `${abbreviatePath(comment.anchor.path, pathBudget)}${lineSuffix}`);
-      lines.push(`${pointer}${tag}  ${loc}`);
-      const titleColor: ColorToken = rejected ? 'textDim' : 'text';
-      for (const titleLine of wrap(comment.title, width - 2)) {
-        lines.push('  ' + (selected ? currentTheme.boldFg(titleColor, titleLine) : currentTheme.fg(titleColor, titleLine)));
+
+      // 1. Severity line — severity keeps its color even when rejected; the
+      //    reject status sits right-aligned to its right.
+      const severityCell = '  ' + severityColor(comment.severity)(SEVERITY_TAG[comment.severity]);
+      if (rejected) {
+        const marker = '⌫ rejected';
+        const pad = Math.max(1, width - visibleWidth(severityCell) - visibleWidth(marker));
+        lines.push(severityCell + ' '.repeat(pad) + currentTheme.fg('textDim', marker));
+      } else {
+        lines.push(severityCell);
       }
+
+      // 2. Title lines — the selection caret sits on the first title line.
+      const titleColor: ColorToken = rejected ? 'textDim' : 'text';
+      const titleLines = wrap(comment.title, width - 2);
+      (titleLines.length > 0 ? titleLines : ['(untitled)']).forEach((titleLine, ti) => {
+        const caret = ti === 0 && selected ? currentTheme.boldFg('primary', '❯ ') : '  ';
+        const styled = selected
+          ? currentTheme.boldFg(titleColor, titleLine)
+          : currentTheme.fg(titleColor, titleLine);
+        lines.push(caret + styled);
+      });
+
+      // 3. Path line in secondary gray.
+      const lineSuffix = `:${String(comment.anchor.line)}`;
+      const pathBudget = Math.max(1, width - 2 - visibleWidth(lineSuffix));
+      lines.push('  ' + currentTheme.fg('textDim', `${abbreviatePath(comment.anchor.path, pathBudget)}${lineSuffix}`));
+
       lines.push('');
     });
 
