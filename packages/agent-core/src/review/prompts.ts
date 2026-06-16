@@ -30,6 +30,8 @@ export function buildReviewBackground(input: BuildReviewBackgroundInput): Review
     focus: input.input.focus,
     stats: input.stats,
     repoInstructions: nonEmpty(input.repoInstructions),
+    changeType: nonEmpty(input.input.changeType),
+    briefing: nonEmpty(input.input.background),
   };
 }
 

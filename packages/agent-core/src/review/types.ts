@@ -116,6 +116,13 @@ export interface ReviewBackground {
   readonly focus?: string;
   readonly stats: ReviewDiffStats;
   readonly repoInstructions?: string;
+  /** One-line classification of the change from the pilot, e.g. "TUI refactor". */
+  readonly changeType?: string;
+  /**
+   * Pilot's briefing for the reviewers: what the change is, its intent, and the
+   * context needed to judge it. Factual orientation, not a verdict.
+   */
+  readonly briefing?: string;
 }
 
 export interface ReviewStartInput {
@@ -128,7 +135,26 @@ export interface ReviewStartInput {
    * omitted, the orchestrator falls back to its built-in default perspectives.
    */
   readonly directions?: readonly string[];
+  /** Pilot's change classification, threaded into the reviewers' background. */
+  readonly changeType?: string;
+  /** Pilot's briefing for the reviewers, threaded into their background. */
+  readonly background?: string;
 }
+
+export interface ReviewFanOutOptions {
+  readonly parentToolCallId: string;
+  readonly signal: AbortSignal;
+}
+
+/**
+ * Runs the reviewer fan-out for an already-resolved review request. Injected
+ * into the main agent so the `RunCodeReview` tool can drive a review from
+ * inside a turn (the pilot produces the directions and background).
+ */
+export type ReviewFanOutRunner = (
+  input: ReviewStartInput,
+  options: ReviewFanOutOptions,
+) => Promise<ReviewResult>;
 
 export interface ReviewTargetPreview {
   readonly target: ReviewTarget;

@@ -29,6 +29,7 @@ export * from './review/get-comments';
 export * from './review/merge-comments';
 export * from './review/read-file-version';
 export * from './review/read-diff';
+export * from './review/run-code-review';
 export * from './review/update-progress';
 export * from './shell/bash';
 export * from './state/todo-list';

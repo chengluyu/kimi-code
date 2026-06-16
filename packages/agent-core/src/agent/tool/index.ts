@@ -426,6 +426,7 @@ export class ToolManager {
           ),
         this.agent.subagentHost &&
           new b.AgentSwarmTool(this.agent.subagentHost, this.agent.swarmMode),
+        this.agent.reviewFanOut && new b.RunCodeReviewTool(this.agent.reviewFanOut),
         toolServices?.webSearcher && new b.WebSearchTool(toolServices.webSearcher),
         toolServices?.urlFetcher && new b.FetchURLTool(toolServices.urlFetcher),
       ]

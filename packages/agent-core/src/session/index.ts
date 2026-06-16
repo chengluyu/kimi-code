@@ -55,6 +55,7 @@ import {
   type ReviewArtifactSummary,
   type ReviewBaseRef,
   type ReviewCommit,
+  type ReviewFanOutOptions,
   type ReviewPlanPreview,
   type ReviewResult,
   type ReviewScopeSummary,
@@ -548,6 +549,31 @@ export class Session {
     }
   }
 
+  /**
+   * Runs the reviewer fan-out from inside a main-agent turn (driven by the
+   * `RunCodeReview` tool). Unlike {@link startReview}, this does not guard on
+   * `hasActiveTurn` — it is expected to run during a turn — and cancellation
+   * is the caller's tool-call signal rather than {@link cancelReview}.
+   */
+  async runReviewFanOut(input: ReviewStartInput, options: ReviewFanOutOptions): Promise<ReviewResult> {
+    this.assertCodeReviewEnabled();
+    const mainAgent = await this.ensureAgentResumed('main');
+    const orchestrator = new ReviewOrchestrator({
+      kaos: mainAgent.kaos,
+      systemKaos: this.systemContextKaos(mainAgent.kaos.getcwd()),
+      kimiHomeDir: this.options.kimiHomeDir,
+      runtime: this.review,
+      launcher: mainAgent.subagentHost!,
+      parentToolCallId: options.parentToolCallId,
+      signal: options.signal,
+      emitEvent: (event) => {
+        this.emitReviewEvent(event);
+      },
+    });
+    const result = await orchestrator.start(input);
+    return this.persistReviewResult(mainAgent.kaos, result);
+  }
+
   cancelReview(): void {
     this.assertCodeReviewEnabled();
     if (this.activeReviewOrchestrator === undefined) {
@@ -748,6 +774,10 @@ export class Session {
       kaos: this.toolKaos.withCwd(cwd),
       toolServices: this.options.toolServices,
       review: config.review,
+      reviewFanOut:
+        type === 'main' && this.experimentalFlags.enabled('code_review')
+          ? (input, options) => this.runReviewFanOut(input, options)
+          : undefined,
       config: this.options.config,
       homedir,
       skills: this.skills,
