@@ -108,18 +108,48 @@ export function reviewBaseRefChoice(ref: ReviewBaseRef): ReviewChoice {
   };
 }
 
-export function reviewCommitChoice(commit: ReviewCommit): ReviewChoice {
+/** Column widths for aligning the per-commit stats line across a commit list. */
+export interface CommitStatAlign {
+  readonly fileDigits: number;
+  readonly wordLen: number;
+  readonly addWidth: number;
+  readonly delWidth: number;
+}
+
+/** Measure the widest file/＋/－ fields across commits so their columns line up. */
+export function reviewCommitStatAlign(commits: readonly ReviewCommit[]): CommitStatAlign {
+  let fileDigits = 1;
+  let wordLen = 4; // "file"
+  let addWidth = 2; // "+0"
+  let delWidth = 2; // "-0"
+  for (const commit of commits) {
+    if (commit.filesChanged === undefined) continue;
+    fileDigits = Math.max(fileDigits, String(commit.filesChanged).length);
+    if (commit.filesChanged !== 1) wordLen = 5; // "files"
+    addWidth = Math.max(addWidth, `+${String(commit.additions ?? 0)}`.length);
+    delWidth = Math.max(delWidth, `-${String(commit.deletions ?? 0)}`.length);
+  }
+  return { fileDigits, wordLen, addWidth, delWidth };
+}
+
+export function reviewCommitChoice(commit: ReviewCommit, align?: CommitStatAlign): ReviewChoice {
   const shortSha = commit.sha.slice(0, 8);
+  const stats = align ?? reviewCommitStatAlign([commit]);
   return {
     value: commit.sha,
     // Plain text used for search; the visible row is drawn by `render`.
     label: `${shortSha} ${commit.title}`,
-    render: (selected, width) => renderCommitRow(commit, selected, width),
+    render: (selected, width) => renderCommitRow(commit, selected, width, stats),
   };
 }
 
 /** Two-line commit row: orange hash + bold one-line title, then stats + relative time. */
-function renderCommitRow(commit: ReviewCommit, selected: boolean, width: number): readonly string[] {
+function renderCommitRow(
+  commit: ReviewCommit,
+  selected: boolean,
+  width: number,
+  align: CommitStatAlign,
+): readonly string[] {
   const shortSha = commit.sha.slice(0, 8);
   const hash = currentTheme.fg('warning', shortSha);
   // A `↵` marks a commit message with a body; `…` (from clipToWidth) marks
@@ -131,10 +161,15 @@ function renderCommitRow(commit: ReviewCommit, selected: boolean, width: number)
 
   const meta: string[] = [];
   if (commit.filesChanged !== undefined) {
+    // Right-align the counts so the file / + / - columns line up across rows.
+    const word = (commit.filesChanged === 1 ? 'file' : 'files').padEnd(align.wordLen);
+    const files = `${String(commit.filesChanged).padStart(align.fileDigits)} ${word}`;
+    const adds = `+${String(commit.additions ?? 0)}`.padStart(align.addWidth);
+    const dels = `-${String(commit.deletions ?? 0)}`.padStart(align.delWidth);
     meta.push(
-      currentTheme.fg('textDim', formatCount(commit.filesChanged, 'file')) +
-        ' ' + currentTheme.fg('diffAdded', `+${String(commit.additions ?? 0)}`) +
-        ' ' + currentTheme.fg('diffRemoved', `-${String(commit.deletions ?? 0)}`),
+      currentTheme.fg('textDim', files) +
+        ' ' + currentTheme.fg('diffAdded', adds) +
+        ' ' + currentTheme.fg('diffRemoved', dels),
     );
   }
   if (commit.date !== undefined) {

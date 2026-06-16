@@ -9,6 +9,7 @@ import {
   formatReviewArtifactMarkdown,
   resolveTtyLocale,
   reviewCommitChoice,
+  reviewCommitStatAlign,
 } from '#/tui/utils/review-options';
 
 const ANSI_SGR = /\[[0-9;]*m/g;
@@ -185,5 +186,22 @@ describe('reviewCommitChoice', () => {
     const merge = { sha: 'abc123def', title: 'merge', filesChanged: undefined };
     const lines = reviewCommitChoice(merge).render!(false, 120);
     expect(lines).toHaveLength(1);
+  });
+
+  it('right-aligns and column-aligns the stats across a commit list', () => {
+    const commits = [
+      { sha: 'a1', title: 'one', filesChanged: 3, additions: 38, deletions: 13 },
+      { sha: 'b2', title: 'two', filesChanged: 12, additions: 5, deletions: 120 },
+      { sha: 'c3', title: 'three', filesChanged: 1, additions: 0, deletions: 8 },
+    ];
+    const align = reviewCommitStatAlign(commits);
+    const metas = commits.map((commit) => strip(reviewCommitChoice(commit, align).render!(false, 120)[1]!));
+
+    // File count, +additions and -deletions are right-aligned into fixed columns.
+    expect(metas[0]).toBe(' 3 files +38  -13');
+    expect(metas[1]).toBe('12 files  +5 -120');
+    expect(metas[2]).toBe(' 1 file   +0   -8');
+    // Equal length ⇒ every column lines up across rows.
+    expect(new Set(metas.map((line) => line.length)).size).toBe(1);
   });
 });

@@ -26,6 +26,7 @@ import {
   reviewScopeLabel,
   reviewBaseRefChoice,
   reviewCommitChoice,
+  reviewCommitStatAlign,
   type ReviewChoice,
   type ReviewScopeChoice,
 } from '../utils/review-options';
@@ -293,9 +294,10 @@ async function resolveReviewTargetFromScope(
         host.showError('No commits available to review.');
         return undefined;
       }
+      const statAlign = reviewCommitStatAlign(commits);
       const commit = await promptChoice(host, {
         title: 'Select a commit',
-        options: commits.map(reviewCommitChoice),
+        options: commits.map((entry) => reviewCommitChoice(entry, statAlign)),
         searchable: true,
       });
       return commit === undefined ? undefined : { scope: 'single_commit', commit };
