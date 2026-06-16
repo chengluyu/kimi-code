@@ -62,10 +62,23 @@ describe('ReviewSummaryComponent', () => {
       ]),
     );
     expect(out).toContain('   • src/api.ts');
-    expect(out.some((line) => line.includes('Line 142  Missing null check'))).toBe(true);
-    expect(out.some((line) => line.includes('Line 207  Unhandled rejection'))).toBe(true);
+    expect(out.some((line) => line.includes('Line 142:  Missing null check'))).toBe(true);
+    expect(out.some((line) => line.includes('Line 207:  Unhandled rejection'))).toBe(true);
     // no inline "path:line — title" form for the grouped file
     expect(out.some((line) => line.includes('src/api.ts:142 —'))).toBe(false);
+  });
+
+  it('pads Line N: tags so titles align when line numbers differ in width', () => {
+    const out = lines(
+      data([
+        comment({ path: 'src/api.ts', line: 7, title: 'Short' }),
+        comment({ path: 'src/api.ts', line: 142, title: 'Wide' }),
+      ]),
+    );
+    // "Line 7:" is padded to the width of "Line 142:" so both titles start at
+    // the same column (tag width 9 + two trailing spaces).
+    expect(out.some((line) => line.includes('Line 7:    Short'))).toBe(true);
+    expect(out.some((line) => line.includes('Line 142:  Wide'))).toBe(true);
   });
 
   it('keeps two-level grouping: a file may appear under more than one severity', () => {

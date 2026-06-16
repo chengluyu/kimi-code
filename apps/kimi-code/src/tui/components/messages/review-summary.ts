@@ -132,37 +132,40 @@ function renderSingle(comment: ReviewSummaryComment, width: number): string[] {
   if (visibleWidth(oneLine) <= width) {
     return [
       SECTION_INDENT +
-        currentTheme.fg('textDim', `• ${location}`) +
+        currentTheme.boldFg('textDim', `• ${location}`) +
         currentTheme.fg('text', ` — ${comment.title}`),
     ];
   }
   const lineSuffix = `:${String(comment.line)}`;
   const pathBudget = Math.max(1, width - SECTION_INDENT.length - 2 - visibleWidth(lineSuffix));
-  const head = SECTION_INDENT + currentTheme.fg('textDim', `• ${abbreviatePath(comment.path, pathBudget)}${lineSuffix}`);
+  const head = SECTION_INDENT + currentTheme.boldFg('textDim', `• ${abbreviatePath(comment.path, pathBudget)}${lineSuffix}`);
   const titleLines = wrapText(comment.title, Math.max(1, width - ITEM_INDENT.length)).map(
     (line) => ITEM_INDENT + currentTheme.fg('text', line),
   );
   return [head, ...titleLines];
 }
 
-/** Several comments in one file: a path header, then `Line N  title` items. */
+/** Several comments in one file: a path header, then padded `Line N:  title` items. */
 function renderNested(path: string, comments: readonly ReviewSummaryComment[], width: number): string[] {
   const pathBudget = Math.max(1, width - SECTION_INDENT.length - 2);
   const lines = [
-    SECTION_INDENT + currentTheme.fg('textDim', '• ') + currentTheme.fg('text', abbreviatePath(path, pathBudget)),
+    SECTION_INDENT + currentTheme.boldFg('textDim', `• ${abbreviatePath(path, pathBudget)}`),
   ];
-  for (const comment of comments) {
-    const tag = `Line ${String(comment.line)}`;
-    const titleBudget = Math.max(1, width - ITEM_INDENT.length - visibleWidth(tag) - 2);
+  // Pad the `Line N:` tags to a common width so titles align across rows.
+  const tags = comments.map((comment) => `Line ${String(comment.line)}:`);
+  const tagWidth = Math.max(...tags.map((tag) => visibleWidth(tag)));
+  comments.forEach((comment, index) => {
+    const tag = (tags[index] ?? '').padEnd(tagWidth);
+    const titleBudget = Math.max(1, width - ITEM_INDENT.length - tagWidth - 2);
     const wrapped = wrapText(comment.title, titleBudget);
-    const continuation = ' '.repeat(visibleWidth(tag) + 2);
+    const continuation = ' '.repeat(tagWidth + 2);
     wrapped.forEach((line, i) => {
       const prefix = i === 0
         ? currentTheme.fg('textDim', `${tag}  `)
         : currentTheme.fg('textDim', continuation);
       lines.push(ITEM_INDENT + prefix + currentTheme.fg('text', line));
     });
-  }
+  });
   return lines;
 }
 
