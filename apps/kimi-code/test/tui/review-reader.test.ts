@@ -139,3 +139,50 @@ describe('ReviewReaderFullscreenApp markdown body', () => {
     expect(body).not.toContain('**bold**');
   });
 });
+
+function unsortedArtifact(): ReviewArtifact {
+  const make = (
+    severity: 'critical' | 'important' | 'minor',
+    path: string,
+    line: number,
+    title: string,
+  ) => ({
+    id: `${path}:${String(line)}`,
+    severity,
+    title,
+    body: '',
+    anchor: { path, side: 'new', line, hunkHeader: '@@' },
+    state: 'candidate',
+    dismissal: null,
+  });
+  return {
+    slug: 'topic-slug',
+    target: { scope: 'working_tree' },
+    diff: '',
+    comments: [
+      make('minor', 'src/b.ts', 5, 'minor-b5'),
+      make('critical', 'src/b.ts', 9, 'crit-b9'),
+      make('critical', 'src/a.ts', 30, 'crit-a30'),
+      make('critical', 'src/a.ts', 2, 'crit-a2'),
+      make('important', 'src/a.ts', 1, 'imp-a1'),
+    ],
+  } as unknown as ReviewArtifact;
+}
+
+describe('ReviewReaderFullscreenApp comment order', () => {
+  it('sorts comments by severity, then file, then line', () => {
+    const app = new ReviewReaderFullscreenApp({
+      artifact: unsortedArtifact(),
+      terminal: { rows: 60, columns: 120 } as never,
+      onReject: async () => undefined,
+      onRestore: async () => undefined,
+      onClose: () => {},
+      requestRender: vi.fn(),
+    });
+    const text = app.render(120).map((line) => line.replaceAll(ANSI_SGR, '')).join('\n');
+    const order = ['crit-a2', 'crit-a30', 'crit-b9', 'imp-a1', 'minor-b5'];
+    const positions = order.map((title) => text.indexOf(title));
+    expect(positions.every((pos) => pos >= 0)).toBe(true);
+    expect(positions).toEqual(positions.toSorted((a, b) => a - b));
+  });
+});

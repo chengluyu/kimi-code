@@ -92,7 +92,7 @@ export class ReviewReaderFullscreenApp extends Container implements Focusable {
   }
 
   private get comments(): readonly ReviewArtifactComment[] {
-    return this.artifact.comments;
+    return this.artifact.comments.toSorted(compareComments);
   }
 
   private moveComment(delta: number): void {
@@ -292,4 +292,19 @@ function renderBand(comment: ReviewArtifactComment, gutterWidth: number, width: 
 function cell(line: string, width: number): string {
   const truncated = truncateToWidth(line, width, '…');
   return truncated + ' '.repeat(Math.max(0, width - visibleWidth(truncated)));
+}
+
+const SEVERITY_RANK: Record<ReviewArtifactComment['severity'], number> = {
+  critical: 0,
+  important: 1,
+  minor: 2,
+};
+
+/** Order comments by severity, then file path, then line — stable across reject/restore. */
+function compareComments(a: ReviewArtifactComment, b: ReviewArtifactComment): number {
+  const severity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+  if (severity !== 0) return severity;
+  const path = a.anchor.path.localeCompare(b.anchor.path);
+  if (path !== 0) return path;
+  return a.anchor.line - b.anchor.line;
 }
