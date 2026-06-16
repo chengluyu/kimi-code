@@ -27,7 +27,7 @@ import { abbreviatePath } from '@/tui/utils/abbreviate-path';
 import { reviewTargetHeading } from '@/tui/utils/review-options';
 import { buildFileDiff, type FileDiffRow } from '@/tui/utils/review-diff';
 import { printableChar } from '@/tui/utils/printable-key';
-import { clampIndex, SEVERITY_TAG, severityColor, wrap } from './review-reader';
+import { clampIndex, renderMarkdownLines, SEVERITY_TAG, severityColor, wrap } from './review-reader';
 
 const MIN_WIDTH = 60;
 const MIN_HEIGHT = 8;
@@ -275,7 +275,9 @@ function renderBand(comment: ReviewArtifactComment, gutterWidth: number, width: 
   const inner = Math.max(8, width - indent.length - 2);
   const ruleWidth = Math.max(1, width - indent.length - 1);
   const heading = `! ${comment.severity} — ${comment.title}`;
-  const body = comment.body.length > 0 ? wrap(comment.body, inner) : [];
+  // Render the body through the shared Markdown component so bold/code/lists
+  // match the rest of the chat; the heading stays plain text.
+  const body = comment.body.length > 0 ? renderMarkdownLines(comment.body, inner) : [];
   const tone: ColorToken = comment.severity === 'critical' ? 'error' : comment.severity === 'important' ? 'warning' : 'textDim';
   const bar = currentTheme.fg(tone, '┃');
   const lines = [indent + currentTheme.fg(tone, '┎' + '─'.repeat(ruleWidth))];

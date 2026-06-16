@@ -91,3 +91,51 @@ describe('ReviewReaderFullscreenApp export', () => {
     });
   });
 });
+
+const DIFF = [
+  'diff --git a/src/a.ts b/src/a.ts',
+  '--- a/src/a.ts',
+  '+++ b/src/a.ts',
+  '@@ -1,3 +1,3 @@',
+  ' line1',
+  '-old',
+  '+new line',
+  ' line3',
+  '',
+].join('\n');
+
+function markdownArtifact(): ReviewArtifact {
+  return {
+    slug: 'topic-slug',
+    target: { scope: 'working_tree' },
+    diff: DIFF,
+    comments: [
+      {
+        id: 'c1',
+        severity: 'critical',
+        title: 'A bug',
+        body: 'This is **bold** and `code` text.',
+        anchor: { path: 'src/a.ts', side: 'new', line: 2, hunkHeader: '@@ -1,3 +1,3 @@' },
+        state: 'candidate',
+        dismissal: null,
+      },
+    ],
+  } as unknown as ReviewArtifact;
+}
+
+describe('ReviewReaderFullscreenApp markdown body', () => {
+  it('renders the comment body as Markdown (no raw ** markers)', () => {
+    const app = new ReviewReaderFullscreenApp({
+      artifact: markdownArtifact(),
+      terminal: { rows: 40, columns: 120 } as never,
+      onReject: async () => undefined,
+      onRestore: async () => undefined,
+      onClose: () => {},
+      requestRender: vi.fn(),
+    });
+    const body = app.render(120).map((line) => line.replaceAll(ANSI_SGR, '')).join('\n');
+    expect(body).toContain('bold');
+    expect(body).toContain('code');
+    expect(body).not.toContain('**bold**');
+  });
+});
