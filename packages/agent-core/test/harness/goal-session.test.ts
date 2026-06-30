@@ -2,7 +2,12 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
-import { APIConnectionError, APIStatusError, type ProviderConfig } from '@moonshot-ai/kosong';
+import {
+  APIConnectionError,
+  APIStatusError,
+  type GenerateResult,
+  type ProviderConfig,
+} from '@moonshot-ai/kosong';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderManager } from '../../src/session/provider-manager';
@@ -587,6 +592,109 @@ describe('goal session end-to-end', () => {
     expect(scripted.calls).toHaveLength(1);
     expect(goal?.status).toBe('blocked');
     expect(goal?.tokensUsed).toBeGreaterThan(1);
+  });
+
+  it('counts only model output tokens against the goal token budget', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const largeInputSmallOutput = {
+      inputOther: 10_000,
+      inputCacheRead: 20_000,
+      inputCacheCreation: 30_000,
+      output: 1,
+    };
+    let calls = 0;
+    const responses: GenerateResult[] = [
+      {
+        id: 'usage-1',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'working' }],
+          toolCalls: [],
+        },
+        usage: largeInputSmallOutput,
+        finishReason: 'completed',
+        rawFinishReason: 'stop',
+      },
+      {
+        id: 'usage-2',
+        message: {
+          role: 'assistant',
+          content: [],
+          toolCalls: [
+            {
+              type: 'function',
+              id: 'complete',
+              name: 'UpdateGoal',
+              arguments: JSON.stringify({ status: 'complete' }),
+            },
+          ],
+        },
+        usage: largeInputSmallOutput,
+        finishReason: 'tool_calls',
+        rawFinishReason: 'tool_calls',
+      },
+      {
+        id: 'usage-3',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'done' }],
+          toolCalls: [],
+        },
+        usage: largeInputSmallOutput,
+        finishReason: 'completed',
+        rawFinishReason: 'stop',
+      },
+    ];
+    const generate: NonNullable<AgentOptions['generate']> = async (
+      _provider,
+      _systemPrompt,
+      _tools,
+      _history,
+      callbacks,
+      options,
+    ) => {
+      options?.signal?.throwIfAborted();
+      options?.onRequestStart?.();
+      const response = responses[calls];
+      calls += 1;
+      if (response === undefined) {
+        throw new Error(`Unexpected generate call #${String(calls)}`);
+      }
+      for (const part of response.message.content) {
+        await callbacks?.onMessagePart?.(part);
+      }
+      for (const toolCall of response.message.toolCalls) {
+        await callbacks?.onMessagePart?.(toolCall);
+      }
+      options?.onStreamEnd?.();
+      return response;
+    };
+    const { session, agent } = await setupSession(sessionDir, events, ['UpdateGoal'], generate);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ agentId: 'main', objective: 'work' });
+    await agent.goal.setBudgetLimits({ budgetLimits: { tokenBudget: 3 } }, 'model');
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+    await session.flushMetadata();
+
+    expect(calls).toBe(3);
+    expect((await api.getGoal({ agentId: 'main' })).goal).toBeNull();
+    const records = await readWireRecords(sessionDir);
+    const usageRecords = records
+      .filter((record) => record['type'] === 'goal.update' && typeof record['tokensUsed'] === 'number')
+      .map((record) => record['tokensUsed']);
+    expect(usageRecords).toEqual([1, 2]);
+    const completionEvent = events.find((event) => {
+      const change = event['change'] as Record<string, unknown> | undefined;
+      return event['type'] === 'goal.updated' && change?.['kind'] === 'completion';
+    });
+    expect(completionEvent?.['change']).toMatchObject({
+      kind: 'completion',
+      status: 'complete',
+      stats: expect.objectContaining({ tokensUsed: 2 }),
+    });
   });
 
   it('does not let a Stop hook continue past a reached goal budget', async () => {

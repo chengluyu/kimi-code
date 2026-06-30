@@ -7,7 +7,6 @@ import {
   APIEmptyResponseError,
   APIStatusError,
   APITimeoutError,
-  grandTotal,
   inputTotal,
   isContextOverflowStatusError,
   type ContentPart,
@@ -695,7 +694,7 @@ export class TurnFlow {
           maxRetryAttempts: loopControl?.maxRetriesPerStep,
           recordStepUsage: async (usage) => {
             try {
-              const snapshot = await this.agent.goal.recordTokenUsage(grandTotal(usage));
+              const snapshot = await this.agent.goal.recordTokenUsage(usage.output);
               stopForGoalBudget = snapshot?.budget.overBudget === true;
             } catch (error) {
               this.agent.log.warn('goal token accounting failed', { error });
