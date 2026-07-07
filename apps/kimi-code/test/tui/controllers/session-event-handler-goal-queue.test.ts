@@ -54,6 +54,7 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
         permissionMode: 'auto',
       },
       queuedMessages: [],
+      queuedMessageDispatchPending: false,
       theme: { palette: getBuiltInPalette('dark') },
       toolOutputExpanded: false,
       todoPanel: { getTodos: vi.fn(() => []) },
@@ -68,10 +69,14 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
       flushNow: vi.fn(),
       resetToolUi: vi.fn(),
       finalizeTurn: vi.fn(),
+      hasActiveTurn: vi.fn(() => false),
       hasThinkingDraft: vi.fn(() => false),
       flushThinkingToTranscript: vi.fn(),
       appendAssistantDelta: vi.fn(),
       scheduleFlush: vi.fn(),
+      beginCompaction: vi.fn(),
+      endCompaction: vi.fn(),
+      cancelCompaction: vi.fn(),
     },
     requireSession: vi.fn(() => session),
     setAppState: vi.fn(),
@@ -136,6 +141,20 @@ function turnEndedEvent() {
     agentId: 'main',
     turnId: 1,
     reason: 'completed',
+  } as const;
+}
+
+function compactionCompletedEvent() {
+  return {
+    type: 'compaction.completed',
+    sessionId: 's1',
+    agentId: 'main',
+    result: {
+      summary: 'summary',
+      tokensBefore: 100,
+      tokensAfter: 10,
+      compactedCount: 1,
+    },
   } as const;
 }
 
@@ -257,6 +276,51 @@ describe('SessionEventHandler goal queue promotion', () => {
         replace: false,
       });
     });
+  });
+
+  it('waits for a queued user input drained after compaction before promoting the next queued goal', async () => {
+    const { host, session } = makeHost();
+    host.state.appState.isCompacting = true;
+    host.state.queuedMessages = [{ text: 'queued user turn' }];
+    host.shiftQueuedMessage.mockImplementation(() => host.state.queuedMessages.shift());
+    const handler = new SessionEventHandler(host);
+    host.setAppState.mockImplementation((patch: Record<string, unknown>) => {
+      const busyChanged = 'streamingPhase' in patch || 'isCompacting' in patch;
+      Object.assign(host.state.appState, patch);
+      if (busyChanged) handler.retryQueuedGoalPromotion();
+    });
+    host.sendQueuedMessage.mockImplementation((_session: unknown, item: { text: string }) => {
+      if (item.text === 'queued user turn') {
+        host.setAppState({ streamingPhase: 'waiting' });
+      }
+    });
+    const sendQueued = sendQueuedViaHost(host, session);
+
+    handler.requestQueuedGoalPromotion();
+    handler.handleEvent(compactionCompletedEvent(), sendQueued);
+
+    await vi.waitFor(() => {
+      expect(host.sendQueuedMessage).toHaveBeenCalledWith(session, { text: 'queued user turn' });
+    });
+    expect(session.createGoal).not.toHaveBeenCalled();
+
+    handler.handleEvent(turnEndedEvent(), sendQueued);
+
+    await vi.waitFor(() => {
+      expect(session.createGoal).toHaveBeenCalledWith({
+        objective: 'Ship queued goal',
+        replace: false,
+      });
+    });
+    const sendQueuedCalls = host.sendQueuedMessage.mock.calls as Array<[unknown, { text?: string }]>;
+    const userMessageIndex = sendQueuedCalls.findIndex(
+      ([, item]) => item.text === 'queued user turn',
+    );
+    expect(userMessageIndex).toBeGreaterThanOrEqual(0);
+    expect(host.sendQueuedMessage).toHaveBeenLastCalledWith(session, { text: 'Ship queued goal' });
+    const userMessageOrder = host.sendQueuedMessage.mock.invocationCallOrder[userMessageIndex]!;
+    const goalCreateOrder = session.createGoal.mock.invocationCallOrder[0]!;
+    expect(userMessageOrder).toBeLessThan(goalCreateOrder);
   });
 
   it('leaves the queued goal in place when the next goal cannot start', async () => {
