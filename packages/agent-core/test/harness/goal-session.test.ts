@@ -751,6 +751,57 @@ describe('goal session end-to-end', () => {
     expect(goal?.status).toBe('blocked');
   });
 
+  it('preserves buffered steered input when the goal budget is reached', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    let agentRef: Awaited<ReturnType<typeof setupSession>>['agent'] | undefined;
+    let calls = 0;
+    const generate: NonNullable<AgentOptions['generate']> = async (
+      _provider,
+      _systemPrompt,
+      _tools,
+      _history,
+      callbacks,
+      options,
+    ) => {
+      calls += 1;
+      if (calls > 1) throw new Error('Budget should stop before another model step');
+      options?.signal?.throwIfAborted();
+      options?.onRequestStart?.();
+      await callbacks?.onMessagePart?.({ type: 'text', text: 'working' });
+      agentRef?.turn.steer([{ type: 'text', text: 'urgent user steer' }]);
+      options?.onStreamEnd?.();
+      return {
+        id: 'budget-steer',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'working' }],
+          toolCalls: [],
+        },
+        usage: {
+          inputOther: 0,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+          output: 1,
+        },
+        finishReason: 'completed',
+        rawFinishReason: 'stop',
+      };
+    };
+    const { session, agent } = await setupSession(sessionDir, events, ['GetGoal'], generate);
+    agentRef = agent;
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ agentId: 'main', objective: 'work' });
+    await agent.goal.setBudgetLimits({ budgetLimits: { tokenBudget: 1 } }, 'model');
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    expect(calls).toBe(1);
+    expect((await api.getGoal({ agentId: 'main' })).goal?.status).toBe('blocked');
+    expect(JSON.stringify(agent.context.history)).toContain('urgent user steer');
+  });
+
   it('preserves terminal status and demotes active goals across resume', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];

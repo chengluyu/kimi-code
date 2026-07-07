@@ -748,17 +748,21 @@ export class TurnFlow {
             // oxlint-disable-next-line no-loop-func -- stop hook continuation state is scoped to this turn.
             shouldContinueAfterStop: async (ctx) => {
               const { signal } = ctx;
+              const flushedSteeredMessages = this.flushSteerBuffer();
               // 0. A reached hard goal budget is a deterministic ceiling. While
               //    the goal is still active, never extend the turn — neither a
               //    steered message nor a Stop-hook continuation — past it; end
               //    the turn so the goal driver blocks the goal at the boundary.
-              //    A goal the model just marked terminal is no longer active, so
-              //    its final outcome message (step 2 below) still runs.
+              //    Buffered steers are still flushed above so real-time user
+              //    input is preserved in context even when the budget stops the
+              //    turn. A goal the model just marked terminal is no longer
+              //    active, so its final outcome message (step 2 below) still runs.
               if (stopForGoalBudget && this.agent.goal.getActiveGoal() !== null) {
                 return { continue: false };
               }
-              // 1. Flush any steered user messages.
-              if (this.flushSteerBuffer()) return { continue: true };
+              // 1. If steered user messages were flushed and no active-goal
+              //    budget stopped the turn, let the model react to them.
+              if (flushedSteeredMessages) return { continue: true };
               signal.throwIfAborted();
 
               // Print-mode drain: when `kimi -p` ends a turn while background
