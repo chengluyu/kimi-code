@@ -8,7 +8,7 @@ import MentionMenu from './MentionMenu.vue';
 import { buildSlashItems, parseSlash } from '../../lib/slashCommands';
 import type { FileItem } from './MentionMenu.vue';
 import type { ActivationBadges, ConversationStatus, PermissionMode, QueuedPromptView } from '../../types';
-import type { AppModel, AppSkill, ThinkingLevel } from '../../api/types';
+import type { AppGoal, AppModel, AppSkill, ThinkingLevel } from '../../api/types';
 import {
   coerceThinkingForModel,
   commitLevel,
@@ -23,6 +23,7 @@ import { useMentionMenu } from '../../composables/useMentionMenu';
 import { useComposerDraft } from '../../composables/useComposerDraft';
 import { useAttachmentUpload } from '../../composables/useAttachmentUpload';
 import Spinner from '../ui/Spinner.vue';
+import Button from '../ui/Button.vue';
 import IconButton from '../ui/IconButton.vue';
 import Icon from '../ui/Icon.vue';
 import ContextRing from '../ui/ContextRing.vue';
@@ -46,6 +47,7 @@ const props = withDefaults(defineProps<{
   planMode?: boolean;
   swarmMode?: boolean;
   goalMode?: boolean;
+  goal?: AppGoal | null;
   activationBadges?: ActivationBadges;
   /** Available models for the quick-switch dropdown. */
   models?: AppModel[];
@@ -653,8 +655,11 @@ function thinkingSegmentLabel(segment: string): string {
 // Plan toggle
 const planOn = computed(() => props.planMode === true);
 const swarmOn = computed(() => props.swarmMode === true);
-const goalActive = computed(() => props.activationBadges?.goal !== null);
+const goalStatus = computed(() => props.goal?.status ?? props.activationBadges?.goal?.status ?? null);
+const goalActive = computed(() => goalStatus.value !== null && goalStatus.value !== 'complete');
 const goalArmed = computed(() => goalActive.value || props.goalMode === true);
+const goalCanPause = computed(() => goalStatus.value === 'active');
+const goalCanResume = computed(() => goalStatus.value === 'paused' || goalStatus.value === 'blocked');
 
 // Modes selector (plan / goal / swarm) — the popover that replaces the bare
 // "plan" pill. Plan/Swarm are real client toggles; goal reflects agent-driven
@@ -1027,7 +1032,7 @@ function selectModel(modelId: string): void {
                   type="button"
                   class="mode-row-main"
                   role="menuitem"
-                  @click="goalActive ? emit('controlGoal', 'cancel') : emit('toggleGoal')"
+                  @click="goalActive ? emit('focusGoal') : emit('toggleGoal')"
                 >
                   <span class="mode-row-icon"><Icon name="target" size="sm" /></span>
                   <span class="mode-row-info">
@@ -1037,16 +1042,35 @@ function selectModel(modelId: string): void {
                   <span v-if="!goalActive" class="mode-switch" :class="{ on: props.goalMode }"><span class="mode-knob" /></span>
                 </button>
                 <div v-if="goalActive" class="mode-row-actions">
-                  <button
-                    type="button"
+                  <Button
+                    v-if="goalCanPause"
+                    size="sm"
+                    variant="secondary"
                     class="mode-row-action"
                     @click="emit('controlGoal', 'pause')"
-                  >{{ t('status.goalPause') }}</button>
-                  <button
-                    type="button"
+                  >
+                    <Icon name="pause" size="sm" />
+                    <span>{{ t('status.goalPause') }}</span>
+                  </Button>
+                  <Button
+                    v-if="goalCanResume"
+                    size="sm"
+                    variant="primary"
                     class="mode-row-action"
                     @click="emit('controlGoal', 'resume')"
-                  >{{ t('status.goalResume') }}</button>
+                  >
+                    <Icon name="play" size="sm" />
+                    <span>{{ t('status.goalResume') }}</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-soft"
+                    class="mode-row-action"
+                    @click="emit('controlGoal', 'cancel')"
+                  >
+                    <Icon name="close" size="sm" />
+                    <span>{{ t('status.goalCancel') }}</span>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -2039,8 +2063,12 @@ function selectModel(modelId: string): void {
 .mode-switch.on .mode-knob { transform: translateX(15px); }
 
 .mode-row-goal {
+  --mode-row-icon-col: 14px;
+  --mode-row-col-gap: 7px;
+  --mode-row-pad-x: 7px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   cursor: default;
   padding: 0;
   gap: 0;
@@ -2051,12 +2079,12 @@ function selectModel(modelId: string): void {
 }
 .mode-row-main {
   display: grid;
-  grid-template-columns: 14px var(--composer-menu-desc-width, max-content);
-  column-gap: 7px;
+  grid-template-columns: var(--mode-row-icon-col) var(--composer-menu-desc-width, max-content);
+  column-gap: var(--mode-row-col-gap);
   row-gap: 2px;
   align-items: start;
   width: 100%;
-  padding: 6px 7px;
+  padding: 6px var(--mode-row-pad-x);
   border: none;
   background: none;
   border-radius: 6px;
@@ -2068,21 +2096,16 @@ function selectModel(modelId: string): void {
 .mode-row-goal.on .mode-row-main .mode-row-name { color: var(--color-accent-hover); }
 .mode-row-actions {
   display: flex;
-  gap: 6px;
-  flex: 1 1 100%;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-start;
+  padding: 0 var(--mode-row-pad-x) var(--mode-row-pad-x)
+    calc(var(--mode-row-pad-x) + var(--mode-row-icon-col) + var(--mode-row-col-gap));
 }
 .mode-row-action {
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--color-text);
-  font-size: calc(var(--ui-font-size) - 3px);
-  cursor: pointer;
+  flex: none;
 }
-.mode-row-action:hover:not(:disabled) { background: var(--panel2); }
-.mode-row-action:disabled { opacity: 0.5; cursor: default; }
+.mode-row-action :deep(.ui-button__content) { gap: var(--space-1); }
 .mode-row-input {
   flex: 1;
   min-width: 0;

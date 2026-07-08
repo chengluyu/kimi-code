@@ -1220,6 +1220,7 @@ defineExpose({ loadComposerForEdit, focusComposer });
               :plan-mode="planMode"
               :swarm-mode="swarmMode"
               :goal-mode="goalMode"
+              :goal="goal"
               :activation-badges="activationBadges"
               :models="models"
               :starred-ids="starredIds"

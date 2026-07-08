@@ -62,6 +62,7 @@ import RiLoginBoxLine from '~icons/ri/login-box-line';
 import RiMailLine from '~icons/ri/mail-line';
 import RiMessageLine from '~icons/ri/message-line';
 import RiMoreLine from '~icons/ri/more-line';
+import RiPauseFill from '~icons/ri/pause-fill';
 import RiPencilLine from '~icons/ri/pencil-line';
 import RiPlayFill from '~icons/ri/play-fill';
 import RiQuestionLine from '~icons/ri/question-line';
@@ -125,6 +126,7 @@ import RawLoginBoxLine from '~icons/ri/login-box-line?raw';
 import RawMailLine from '~icons/ri/mail-line?raw';
 import RawMessageLine from '~icons/ri/message-line?raw';
 import RawMoreLine from '~icons/ri/more-line?raw';
+import RawPauseFill from '~icons/ri/pause-fill?raw';
 import RawPencilLine from '~icons/ri/pencil-line?raw';
 import RawPlayFill from '~icons/ri/play-fill?raw';
 import RawQuestionLine from '~icons/ri/question-line?raw';
@@ -203,6 +205,7 @@ export type IconName =
   | 'clock'
   | 'sparkles'
   | 'target'
+  | 'pause'
   | 'play'
   | 'stop'
   | 'star'
@@ -284,6 +287,7 @@ export const ICONS: Record<IconName, IconEntry> = {
   clock: entry(RiTimeLine, RawTimeLine),
   sparkles: entry(RiSparklingLine, RawSparklingLine),
   target: entry(RiTargetLine, RawTargetLine),
+  pause: entry(RiPauseFill, RawPauseFill),
   play: entry(RiPlayFill, RawPlayFill),
   stop: entry(RiStopFill, RawStopFill),
   star: entry(RiStarFill, RawStarFill),
@@ -389,6 +393,7 @@ export const ICON_GROUPS: ReadonlyArray<readonly [string, readonly IconName[]]> 
       'alert-triangle',
       'clock',
       'sparkles',
+      'pause',
       'play',
       'stop',
       'star',
