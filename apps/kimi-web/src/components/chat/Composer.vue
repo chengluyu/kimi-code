@@ -905,15 +905,23 @@ function selectModel(modelId: string): void {
               <span v-if="goalArmed" class="mode-tag">{{ t('status.goalLabel') }}</span>
             </button>
 
-            <div v-if="modesOpen" ref="modesMenuRef" class="modes-menu" :style="modesMenuStyle">
+            <div v-if="modesOpen" ref="modesMenuRef" class="modes-menu" :style="modesMenuStyle" role="menu">
               <!-- Plan — functional client toggle -->
-              <button type="button" class="mode-row" :class="{ on: planOn }" @click="emit('togglePlan')">
-                <span class="mode-row-name">{{ t('status.planLabel') }}</span>
+              <button type="button" class="mode-row" :class="{ on: planOn }" role="menuitem" @click="emit('togglePlan')">
+                <span class="mode-row-icon"><Icon name="file-edit" size="sm" /></span>
+                <span class="mode-row-info">
+                  <span class="mode-row-name">{{ t('status.planLabel') }}</span>
+                  <span class="mode-row-desc">{{ t('status.planDesc') }}</span>
+                </span>
                 <span class="mode-switch" :class="{ on: planOn }"><span class="mode-knob" /></span>
               </button>
               <!-- Swarm — functional client toggle -->
-              <button type="button" class="mode-row" :class="{ on: swarmOn }" @click="emit('toggleSwarm')">
-                <span class="mode-row-name">{{ t('status.swarmLabel') }}</span>
+              <button type="button" class="mode-row" :class="{ on: swarmOn }" role="menuitem" @click="emit('toggleSwarm')">
+                <span class="mode-row-icon"><Icon name="sparkles" size="sm" /></span>
+                <span class="mode-row-info">
+                  <span class="mode-row-name">{{ t('status.swarmLabel') }}</span>
+                  <span class="mode-row-desc">{{ t('status.swarmDesc') }}</span>
+                </span>
                 <span class="mode-switch" :class="{ on: swarmOn }"><span class="mode-knob" /></span>
               </button>
               <!-- Goal — lifecycle controls when active; switch is on when active or armed. -->
@@ -921,9 +929,14 @@ function selectModel(modelId: string): void {
                 <button
                   type="button"
                   class="mode-row-main"
+                  role="menuitem"
                   @click="goalActive ? emit('controlGoal', 'cancel') : emit('toggleGoal')"
                 >
-                  <span class="mode-row-name">{{ t('status.goalLabel') }}</span>
+                  <span class="mode-row-icon"><Icon name="target" size="sm" /></span>
+                  <span class="mode-row-info">
+                    <span class="mode-row-name">{{ t('status.goalLabel') }}</span>
+                    <span class="mode-row-desc">{{ t('status.goalDesc') }}</span>
+                  </span>
                   <span v-if="!goalActive" class="mode-switch" :class="{ on: props.goalMode }"><span class="mode-knob" /></span>
                 </button>
                 <div v-if="goalActive" class="mode-row-actions">
@@ -1729,12 +1742,15 @@ function selectModel(modelId: string): void {
 
 .pd-check {
   width: 14px;
+  min-height: 1lh;
   flex: none;
   color: var(--color-accent);
-  font-weight: 500;
+  font-size: var(--ui-font-size);
+  font-weight: var(--weight-medium);
   display: flex;
+  align-items: center;
   justify-content: center;
-  margin-top: 1px;
+  line-height: var(--leading-normal);
 }
 
 .pd-info {
@@ -1746,16 +1762,18 @@ function selectModel(modelId: string): void {
 }
 
 .pd-name {
-  font-family: var(--sans);
+  font-family: var(--font-ui);
   font-size: var(--ui-font-size);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-normal);
 }
 
 .pd-desc {
-  font-family: var(--sans);
-  font-size: var(--ui-font-size);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--muted);
-  line-height: 1.4;
+  line-height: var(--leading-normal);
 }
 
 /* Toggle pills (Thinking / Plan) */
@@ -1800,35 +1818,72 @@ function selectModel(modelId: string): void {
   position: fixed;
   z-index: var(--z-dropdown);
   min-width: 220px;
+  max-width: 280px;
   background: var(--color-surface-raised);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 4px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .mode-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 7px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 7px;
   border: none;
   background: none;
   border-radius: 6px;
   cursor: pointer;
-  font-family: var(--sans);
+  font-family: var(--font-ui);
   text-align: left;
 }
-.mode-row:hover:not(:disabled) { background: var(--panel2); }
+.mode-row:hover:not(:disabled) { background: var(--color-surface-sunken); }
 .mode-row:disabled { cursor: not-allowed; opacity: 0.45; }
-.mode-row-name { font-size: var(--ui-font-size-sm); color: var(--color-text); }
+.mode-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.mode-row-icon {
+  width: 14px;
+  min-height: 1lh;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--ui-font-size);
+  line-height: var(--leading-normal);
+}
+.mode-row-name {
+  font-size: var(--ui-font-size);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  line-height: var(--leading-normal);
+}
+.mode-row-desc {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
+  line-height: var(--leading-normal);
+}
 .mode-row-not-supported {
   margin-left: auto;
   font-size: var(--ui-font-size-xs);
   color: var(--muted);
 }
-.mode-row.on .mode-row-name { color: var(--color-accent-hover); font-weight: 500; }
+.mode-row.on {
+  background: var(--color-accent-soft);
+}
+.mode-row.on .mode-row-name { color: var(--color-accent-hover); }
+.mode-row.on .mode-row-icon { color: var(--color-accent-hover); }
 .mode-row-meta { font-family: var(--mono); font-size: calc(var(--ui-font-size) - 3px); color: var(--muted); }
 .mode-row:disabled .mode-row-meta { color: var(--faint); }
 .mode-switch {
@@ -1862,22 +1917,25 @@ function selectModel(modelId: string): void {
   gap: 0;
 }
 .mode-row-goal:hover { background: transparent; }
+.mode-row-goal.on {
+  background: var(--color-accent-soft);
+}
 .mode-row-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 7px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 7px;
   border: none;
   background: none;
   border-radius: 6px;
   cursor: pointer;
-  font-family: var(--sans);
+  font-family: var(--font-ui);
   text-align: left;
 }
-.mode-row-main:hover { background: var(--panel2); }
-.mode-row-goal.on .mode-row-main .mode-row-name { color: var(--color-accent-hover); font-weight: 500; }
+.mode-row-main:hover { background: var(--color-surface-sunken); }
+.mode-row-goal.on .mode-row-main .mode-row-name { color: var(--color-accent-hover); }
 .mode-row-actions {
   display: flex;
   gap: 6px;
@@ -2065,7 +2123,7 @@ function selectModel(modelId: string): void {
     font-size: var(--ui-font-size);
   }
   .pd-desc {
-    font-size: var(--ui-font-size);
+    font-size: var(--text-xs);
   }
 }
 

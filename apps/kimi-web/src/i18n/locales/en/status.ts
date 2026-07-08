@@ -12,13 +12,16 @@ export default {
   permissionYoloDesc: 'Auto-approve tool actions, but agent may still ask questions',
   // Plan mode pill
   planLabel: 'Plan',
+  planDesc: 'Have the agent make a plan before changing files',
   planOn: 'on',
   planOff: 'off',
   planTooltip: 'Toggle plan mode (research before editing)',
   // Mode selector (Plan / Goal / Swarm)
   modesLabel: 'Mode',
   goalLabel: 'Goal',
+  goalDesc: 'Track one objective until it is complete',
   swarmLabel: 'Swarm',
+  swarmDesc: 'Run parallel agents for broader exploration',
   modeOff: 'Off',
   goalPlaceholder: 'What should the agent achieve?',
   goalStart: 'Start',
