@@ -1441,11 +1441,12 @@ defineExpose({ loadComposerForEdit, focusComposer });
   text-align: center;
   padding: 0 16px 16px;
   color: var(--color-text);
-  font-family: var(--sans);
+  font-family: var(--font-ui);
 }
 .empty-hint-title {
   font-size: calc(var(--ui-font-size) + 16px);
-  font-weight: 500;
+  font-optical-sizing: auto;
+  font-weight: 600;
 }
 .empty-hint-text {
   display: inline-block;
@@ -1568,7 +1569,7 @@ defineExpose({ loadComposerForEdit, focusComposer });
   color: var(--color-text);
 }
 .ws-pick-item.on .ws-pick-item-name { color: var(--color-accent-hover); }
-.ws-pick-item-path { font-size: var(--text-xs); color: var(--muted); }
+.ws-pick-item-path { font-size: var(--text-xs); font-weight: 475; color: var(--muted); }
 .ws-pick-item.ws-pick-more {
   flex-direction: row;
   align-items: center;

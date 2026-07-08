@@ -1199,9 +1199,11 @@ function selectModel(modelId: string): void {
 
 /* Main composer card */
 .composer-card {
+  --composer-send-size: 32px;
+  --composer-send-inset: var(--space-2);
   position: relative;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc((var(--composer-send-size) / 2) + var(--composer-send-inset));
   background: var(--bg);
   box-shadow: var(--shadow-md);
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -1465,8 +1467,8 @@ function selectModel(modelId: string): void {
    (handled upstream). Interrupt is a separate Stop button so the two are never
    confused. */
 .send {
-  width: 32px;
-  height: 32px;
+  width: var(--composer-send-size);
+  height: var(--composer-send-size);
   border-radius: 50%;
   background: var(--color-accent);
   color: var(--color-text-on-accent); /* white on accent — readable in light and dark */
@@ -1501,8 +1503,8 @@ function selectModel(modelId: string): void {
    destructive action is easy to spot; fills solid danger on hover. Kept softer
    than the accent Send so Send stays the primary action. */
 .stop {
-  width: 32px;
-  height: 32px;
+  width: var(--composer-send-size);
+  height: var(--composer-send-size);
   border-radius: 50%;
   background: var(--color-danger-soft);
   color: var(--color-danger);
@@ -1536,7 +1538,7 @@ function selectModel(modelId: string): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px 8px;
+  padding: 6px var(--composer-send-inset) var(--composer-send-inset);
   position: relative;
 }
 
@@ -1610,6 +1612,7 @@ function selectModel(modelId: string): void {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+  letter-spacing: 0;
   line-height: 16px;
 }
 
@@ -2134,7 +2137,7 @@ function selectModel(modelId: string): void {
       var(--dock-inline-left, max(12px, env(safe-area-inset-left)));
   }
   .composer-card {
-    border-radius: var(--radius-xl);
+    --composer-send-size: 36px;
     max-width: 100%;
   }
   .input-row {
@@ -2143,9 +2146,9 @@ function selectModel(modelId: string): void {
   }
   /* Send → 36px round (hide the SVG arrow, show only the ::after glyph) */
   .send {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
+    width: var(--composer-send-size);
+    height: var(--composer-send-size);
+    min-width: var(--composer-send-size);
     padding: 0;
     border-radius: 50%;
     font-size: 0;
@@ -2164,9 +2167,9 @@ function selectModel(modelId: string): void {
   }
   /* Stop → 36px round "■" glyph to match the mobile Send sizing. */
   .stop {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
+    width: var(--composer-send-size);
+    height: var(--composer-send-size);
+    min-width: var(--composer-send-size);
     padding: 0;
     border-radius: 50%;
     font-size: 0;
