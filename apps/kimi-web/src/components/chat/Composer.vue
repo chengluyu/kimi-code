@@ -1,5 +1,6 @@
 <!-- apps/kimi-web/src/components/chat/Composer.vue -->
 <script setup lang="ts">
+import { measureNaturalWidth, prepareWithSegments } from '@chenglou/pretext';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SlashMenu from './SlashMenu.vue';
@@ -94,7 +95,7 @@ const emit = defineEmits<{
   selectModel: [modelId: string];
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 // ---------------------------------------------------------------------------
 // Textarea + per-session draft persistence — see useComposerDraft.
@@ -643,6 +644,11 @@ function setThinkingSegment(draft: string): void {
   if (thinkingReadonly.value) return;
   emit('setThinking', commitLevel(currentModel.value, draft));
 }
+function thinkingSegmentLabel(segment: string): string {
+  if (segment === 'on') return t('status.thinkingOn');
+  if (segment === 'off') return t('status.thinkingOff');
+  return effortLabel(segment);
+}
 
 // Plan toggle
 const planOn = computed(() => props.planMode === true);
@@ -693,6 +699,87 @@ const PERM_MODES: { mode: PermissionMode; color: string; labelKey: string; descK
   { mode: 'yolo', color: 'var(--color-warning)', labelKey: 'status.permissionYolo', descKey: 'status.permissionYoloDesc' },
   { mode: 'auto', color: 'var(--color-danger)', labelKey: 'status.permissionAuto', descKey: 'status.permissionAutoDesc' },
 ];
+const MODE_DESC_KEYS = ['status.planDesc', 'status.swarmDesc', 'status.goalDesc'] as const;
+
+const menuMeasureRef = ref<HTMLElement | null>(null);
+const permissionDescriptionWidth = ref('');
+const modeDescriptionWidth = ref('');
+function menuDescStyle(width: string): Record<string, string> {
+  const style: Record<string, string> = {};
+  if (width) style['--composer-menu-desc-width'] = width;
+  return style;
+}
+const permissionMenuStyle = computed<Record<string, string>>(() => menuDescStyle(permissionDescriptionWidth.value));
+const modeMenuMeasureStyle = computed<Record<string, string>>(() => menuDescStyle(modeDescriptionWidth.value));
+const modesMenuInlineStyle = computed<Record<string, string>>(() => ({
+  ...modesMenuStyle.value,
+  ...modeMenuMeasureStyle.value,
+}));
+let menuMeasureFrame: number | null = null;
+
+function cssPx(value: string): number {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function canvasFont(style: CSSStyleDeclaration): string {
+  return `${style.fontStyle || 'normal'} ${style.fontWeight || '400'} ${style.fontSize} ${style.fontFamily}`;
+}
+
+function letterSpacingPx(style: CSSStyleDeclaration): number {
+  return style.letterSpacing === 'normal' ? 0 : cssPx(style.letterSpacing);
+}
+
+function measureTextWidth(text: string, style: CSSStyleDeclaration): number {
+  if (!text) return 0;
+  const prepared = prepareWithSegments(text, canvasFont(style), {
+    letterSpacing: letterSpacingPx(style),
+  });
+  return measureNaturalWidth(prepared);
+}
+
+function measureMenuDescriptions(): void {
+  const probe = menuMeasureRef.value?.querySelector<HTMLElement>('.pd-desc');
+  if (!probe) return;
+  const style = getComputedStyle(probe);
+  const permissionWidth = Math.max(
+    0,
+    ...PERM_MODES.map((opt) => measureTextWidth(t(opt.descKey), style)),
+  );
+  const modeWidth = Math.max(
+    0,
+    ...MODE_DESC_KEYS.map((key) => measureTextWidth(t(key), style)),
+  );
+  permissionDescriptionWidth.value = permissionWidth > 0 ? `${Math.ceil(permissionWidth)}px` : '';
+  modeDescriptionWidth.value = modeWidth > 0 ? `${Math.ceil(modeWidth)}px` : '';
+}
+
+function scheduleMenuDescriptionMeasure(): void {
+  if (typeof window === 'undefined') return;
+  if (menuMeasureFrame !== null) {
+    window.cancelAnimationFrame(menuMeasureFrame);
+  }
+  void nextTick(() => {
+    menuMeasureFrame = window.requestAnimationFrame(() => {
+      menuMeasureFrame = null;
+      measureMenuDescriptions();
+    });
+  });
+}
+
+watch(locale, scheduleMenuDescriptionMeasure, { immediate: true });
+
+onMounted(() => {
+  scheduleMenuDescriptionMeasure();
+  void document.fonts?.ready.then(scheduleMenuDescriptionMeasure);
+});
+
+onUnmounted(() => {
+  if (menuMeasureFrame !== null) {
+    window.cancelAnimationFrame(menuMeasureFrame);
+    menuMeasureFrame = null;
+  }
+});
 
 function choosePermission(mode: PermissionMode): void {
   emit('setPermission', mode);
@@ -850,6 +937,10 @@ function selectModel(modelId: string): void {
 
       <!-- Bottom toolbar — split into individual controls -->
       <div ref="toolbarRef" class="toolbar">
+        <div ref="menuMeasureRef" class="menu-measure" aria-hidden="true">
+          <span class="pd-desc" />
+        </div>
+
         <!-- Left: attach + permission + plan -->
         <div class="toolbar-left">
           <IconButton
@@ -874,7 +965,13 @@ function selectModel(modelId: string): void {
           >{{ permLabel }}</span>
 
           <!-- Permission dropdown — anchored to the toolbar left side -->
-          <div v-if="permDropdownOpen && status" class="perm-dropdown" role="menu" @click.stop>
+          <div
+            v-if="permDropdownOpen && status"
+            class="perm-dropdown"
+            :style="permissionMenuStyle"
+            role="menu"
+            @click.stop
+          >
             <button
               v-for="opt in PERM_MODES"
               :key="opt.mode"
@@ -905,7 +1002,7 @@ function selectModel(modelId: string): void {
               <span v-if="goalArmed" class="mode-tag">{{ t('status.goalLabel') }}</span>
             </button>
 
-            <div v-if="modesOpen" ref="modesMenuRef" class="modes-menu" :style="modesMenuStyle" role="menu">
+            <div v-if="modesOpen" ref="modesMenuRef" class="modes-menu" :style="modesMenuInlineStyle" role="menu">
               <!-- Plan — functional client toggle -->
               <button type="button" class="mode-row" :class="{ on: planOn }" role="menuitem" @click="emit('togglePlan')">
                 <span class="mode-row-icon"><Icon name="file-edit" size="sm" /></span>
@@ -1073,7 +1170,7 @@ function selectModel(modelId: string): void {
                 :class="{ 'is-active': seg === activeThinkingSegment }"
                 :disabled="thinkingReadonly"
                 @click="setThinkingSegment(seg)"
-              >{{ effortLabel(seg) }}</button>
+              >{{ thinkingSegmentLabel(seg) }}</button>
             </div>
           </div>
 
@@ -1396,6 +1493,8 @@ function selectModel(modelId: string): void {
 
 .send svg {
   flex: none;
+  width: var(--p-ic-lg);
+  height: var(--p-ic-lg);
 }
 
 /* Stop button — sibling of Send, shown only while running. Red at rest so the
@@ -1428,6 +1527,8 @@ function selectModel(modelId: string): void {
 }
 .stop svg {
   flex: none;
+  width: var(--p-ic-lg);
+  height: var(--p-ic-lg);
 }
 
 /* Bottom toolbar */
@@ -1437,6 +1538,15 @@ function selectModel(modelId: string): void {
   justify-content: space-between;
   padding: 6px 8px 8px;
   position: relative;
+}
+
+.menu-measure {
+  position: absolute;
+  width: max-content;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .toolbar-left,
@@ -1497,7 +1607,9 @@ function selectModel(modelId: string): void {
 .ctx-num {
   font-size: var(--ui-font-size);
   color: var(--muted);
-  font-family: var(--mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   line-height: 16px;
 }
 
@@ -1509,8 +1621,10 @@ function selectModel(modelId: string): void {
   padding: 2px 7px;
   border-radius: 6px;
   font-size: var(--ui-font-size);
-  line-height: 16px;
+  line-height: var(--leading-normal);
   color: var(--dim);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   user-select: none;
   transition: background 0.1s;
@@ -1567,11 +1681,11 @@ function selectModel(modelId: string): void {
 
 .md-section {
   padding: 4px 7px 2px;
-  font-size: var(--ui-font-size);
+  font-size: var(--text-xs);
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 500;
+  letter-spacing: 0;
+  font-weight: var(--weight-semibold);
 }
 
 .md-row {
@@ -1714,7 +1828,8 @@ function selectModel(modelId: string): void {
   left: 10px;
   z-index: var(--z-dropdown);
   min-width: 220px;
-  max-width: 280px;
+  width: max-content;
+  max-width: calc(100vw - var(--space-8));
   background: var(--color-surface-raised);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
@@ -1726,9 +1841,11 @@ function selectModel(modelId: string): void {
 }
 
 .pd-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: 14px var(--composer-menu-desc-width, max-content);
+  column-gap: 7px;
+  row-gap: 2px;
+  align-items: start;
   width: 100%;
   background: none;
   border: none;
@@ -1741,9 +1858,10 @@ function selectModel(modelId: string): void {
 .pd-row.is-current { background: var(--color-accent-soft); }
 
 .pd-check {
+  grid-column: 1;
+  grid-row: 1;
   width: 14px;
   min-height: 1lh;
-  flex: none;
   color: var(--color-accent);
   font-size: var(--ui-font-size);
   font-weight: var(--weight-medium);
@@ -1754,14 +1872,12 @@ function selectModel(modelId: string): void {
 }
 
 .pd-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
+  display: contents;
 }
 
 .pd-name {
+  grid-column: 2;
+  grid-row: 1;
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   font-weight: var(--weight-medium);
@@ -1769,6 +1885,9 @@ function selectModel(modelId: string): void {
 }
 
 .pd-desc {
+  grid-column: 2;
+  grid-row: 2;
+  width: var(--composer-menu-desc-width, auto);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
@@ -1803,7 +1922,7 @@ function selectModel(modelId: string): void {
 .mode-label { flex: none; }
 .mode-tag {
   flex: none;
-  font-family: var(--mono);
+  font-family: var(--font-ui);
   font-size: calc(var(--ui-font-size) - 3px);
   color: var(--color-accent-hover);
   background: var(--bg);
@@ -1818,7 +1937,8 @@ function selectModel(modelId: string): void {
   position: fixed;
   z-index: var(--z-dropdown);
   min-width: 220px;
-  max-width: 280px;
+  width: max-content;
+  max-width: calc(100vw - var(--space-8));
   background: var(--color-surface-raised);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
@@ -1829,10 +1949,11 @@ function selectModel(modelId: string): void {
   gap: 1px;
 }
 .mode-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: 14px var(--composer-menu-desc-width, max-content);
+  column-gap: 7px;
+  row-gap: 2px;
+  align-items: start;
   width: 100%;
   padding: 6px 7px;
   border: none;
@@ -1845,16 +1966,13 @@ function selectModel(modelId: string): void {
 .mode-row:hover:not(:disabled) { background: var(--color-surface-sunken); }
 .mode-row:disabled { cursor: not-allowed; opacity: 0.45; }
 .mode-row-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
+  display: contents;
 }
 .mode-row-icon {
+  grid-column: 1;
+  grid-row: 1;
   width: 14px;
   min-height: 1lh;
-  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1863,12 +1981,17 @@ function selectModel(modelId: string): void {
   line-height: var(--leading-normal);
 }
 .mode-row-name {
+  grid-column: 2;
+  grid-row: 1;
   font-size: var(--ui-font-size);
   font-weight: var(--weight-medium);
   color: var(--color-text);
   line-height: var(--leading-normal);
 }
 .mode-row-desc {
+  grid-column: 2;
+  grid-row: 2;
+  width: var(--composer-menu-desc-width, auto);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   color: var(--muted);
@@ -1887,7 +2010,9 @@ function selectModel(modelId: string): void {
 .mode-row-meta { font-family: var(--mono); font-size: calc(var(--ui-font-size) - 3px); color: var(--muted); }
 .mode-row:disabled .mode-row-meta { color: var(--faint); }
 .mode-switch {
-  flex: none;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   width: 34px;
   height: 19px;
   border-radius: 999px;
@@ -1911,6 +2036,7 @@ function selectModel(modelId: string): void {
 .mode-switch.on .mode-knob { transform: translateX(15px); }
 
 .mode-row-goal {
+  display: flex;
   flex-wrap: wrap;
   cursor: default;
   padding: 0;
@@ -1921,10 +2047,11 @@ function selectModel(modelId: string): void {
   background: var(--color-accent-soft);
 }
 .mode-row-main {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: 14px var(--composer-menu-desc-width, max-content);
+  column-gap: 7px;
+  row-gap: 2px;
+  align-items: start;
   width: 100%;
   padding: 6px 7px;
   border: none;
@@ -2052,7 +2179,7 @@ function selectModel(modelId: string): void {
   .stop::after {
     content: "■";
     /* Fixed icon glyph size — not part of the UI font scale. */
-    font-size: 14px;
+    font-size: 17px;
     line-height: 1;
   }
 
