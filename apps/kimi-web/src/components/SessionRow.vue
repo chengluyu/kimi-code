@@ -342,7 +342,8 @@ defineExpose({ closeMenu });
 .t {
   color: inherit;
   font-size: var(--text-base);
-  font-weight: var(--weight-regular);
+  font-weight: 450;
+  line-height: var(--leading-tight);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -354,6 +355,7 @@ defineExpose({ closeMenu });
   color: var(--color-text-faint);
   font-size: var(--text-xs);
   font-family: var(--font-ui);
+  font-weight: 475;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
